@@ -231,6 +231,7 @@ export type DerivMessage =
   | { msg_type: "forget"; echo_req: { forget: string } }
   | { msg_type: "forget_all"; echo_req: { forget_all: string } }
   | { msg_type: "ping"; ping: number }
+  | { msg_type: "authorize"; authorize: any }
   | { error: { code: string; message: string; details?: any } }
 
 // Trading Types

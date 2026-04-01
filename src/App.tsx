@@ -30,17 +30,21 @@ function App() {
     setConnectionState({ isConnecting: true, error: null })
     try {
       const api = getDerivAPI()
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("Connection timeout")), 10000)
-        const unsubscribe = api.on("connection", (data: any) => {
-          if (data.connected) {
-            clearTimeout(timeout)
-            unsubscribe()
-            resolve()
-          }
-        })
-      })
+      
+      // Set the authentication token from environment variable
+      const token = import.meta.env.VITE_DERIV_API_TOKEN
+      if (token) {
+        api.setToken(token)
+      }
+      
+      // Re-enable reconnection for manual refresh
+      api.enableReconnection()
+      
+      // Initialize the connection (this is now explicit, not auto-connected in constructor)
+      await api.initialize()
+      
       setConnectionState({ isConnected: true, isConnecting: false, lastConnected: Date.now() })
+      
       const activeSymbols = await api.getActiveSymbols()
       setSymbols(activeSymbols)
       const history = await api.getTickHistory(currentSymbol, 100)
@@ -62,10 +66,40 @@ function App() {
     }
   }, [currentSymbol, setSymbols, setCurrentTick, setTickHistory, setConnectionState])
 
+  // Handle reconnection events
+  useEffect(() => {
+    const api = getDerivAPI()
+    
+    const handleResubscribed = () => {
+      console.log("[App] Resubscribed after reconnection")
+      // Refresh tick history after reconnection
+      api.getTickHistory(currentSymbol, 100).then((history) => {
+        const ticks = history.prices.map((price, i) => ({
+          epoch: history.times[i],
+          quote: price,
+          symbol: currentSymbol,
+        }))
+        setTickHistory(ticks)
+      }).catch(console.error)
+    }
+
+    const unsubscribe = api.on("resubscribed", handleResubscribed)
+    
+    return () => {
+      unsubscribe()
+    }
+  }, [currentSymbol, setTickHistory])
+
   useEffect(() => {
     initializeAPI()
-    return () => { getDerivAPI().disconnect() }
   }, [initializeAPI])
+
+  // Cleanup only on unmount
+  useEffect(() => {
+    return () => { 
+      getDerivAPI().disconnect() 
+    }
+  }, [])
 
   const handleSymbolChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     const newSymbol = e.target.value
