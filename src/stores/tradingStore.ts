@@ -21,6 +21,9 @@ interface TradingState extends ConnectionState {
   activeContracts: ProposalOpenContract[]
   recentTrades: ProfitTable["transactions"]
   
+  // Barrier for Higher/Lower and Touch/No Touch
+  barrier: number | null
+  
   // Actions
   setSymbols: (symbols: ActiveSymbol[]) => void
   setCurrentSymbol: (symbol: string) => void
@@ -33,6 +36,7 @@ interface TradingState extends ConnectionState {
   updateActiveContract: (contractId: number, updates: Partial<ProposalOpenContract>) => void
   removeActiveContract: (contractId: number) => void
   addRecentTrade: (trade: ProfitTable["transactions"][0]) => void
+  setBarrier: (barrier: number | null) => void
   clearState: () => void
 }
 
@@ -51,6 +55,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   isConnecting: false,
   error: null,
   lastConnected: null,
+  barrier: null,
 
   // Actions
   setSymbols: (symbols) => set({ symbols }),
@@ -113,6 +118,8 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   addRecentTrade: (trade) => set((state) => ({
     recentTrades: [trade, ...state.recentTrades].slice(0, 50),
   })),
+
+  setBarrier: (barrier) => set({ barrier }),
 
   clearState: () => set({
     symbols: [],

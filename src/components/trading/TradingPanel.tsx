@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react"
+import React, { useState, useCallback, useEffect } from "react"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { Select } from "../ui/select"
@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import { useTradingStore } from "../../stores/tradingStore"
 import { getDerivAPI } from "../../lib/deriv-api"
 import { formatCurrency, formatNumber } from "../../lib/utils"
-import { TrendingUp, TrendingDown, Loader2 } from "lucide-react"
+import { TrendingUp, TrendingDown, Loader2, Target } from "lucide-react"
 import type { ContractType, DurationUnit, TradeParams } from "../../types/deriv"
 
 const durationUnitOptions = [
@@ -17,13 +17,45 @@ const durationUnitOptions = [
   { value: "d", label: "Days" },
 ]
 
+type ContractCategory = "RISE_FALL" | "HIGHER_LOWER" | "TOUCH_NO_TOUCH"
+
+const contractCategoryOptions: { value: ContractCategory; label: string }[] = [
+  { value: "RISE_FALL", label: "Rise/Fall" },
+  { value: "HIGHER_LOWER", label: "Higher/Lower" },
+  { value: "TOUCH_NO_TOUCH", label: "Touch/No Touch" },
+]
+
 const TradingPanel: React.FC = () => {
-  const { currentSymbol, currentTick, isTrading, setIsTrading } = useTradingStore()
+  const { currentSymbol, currentTick, isTrading, setIsTrading, setBarrier, barrier } = useTradingStore()
   const [amount, setAmount] = useState<string>("10")
   const [duration, setDuration] = useState<string>("5")
   const [durationUnit, setDurationUnit] = useState<DurationUnit>("t")
   const [proposal, setProposal] = useState<{ id: string; ask_price: number; payout: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [contractCategory, setContractCategory] = useState<ContractCategory>("RISE_FALL")
+
+  // Calculate and set barrier based on contract category and current price
+  useEffect(() => {
+    if (!currentTick) {
+      setBarrier(null)
+      return
+    }
+
+    const currentPrice = currentTick.quote
+
+    if (contractCategory === "RISE_FALL") {
+      // Rise/Fall doesn't use a barrier
+      setBarrier(null)
+    } else if (contractCategory === "HIGHER_LOWER") {
+      // Higher/Lower uses a barrier offset from current price
+      // Set barrier 10 points above current price for demonstration
+      setBarrier(currentPrice + 10)
+    } else if (contractCategory === "TOUCH_NO_TOUCH") {
+      // Touch/No Touch uses an absolute barrier price
+      // Set barrier 20 points above current price for demonstration
+      setBarrier(currentPrice + 20)
+    }
+  }, [contractCategory, currentTick, setBarrier])
 
   const getProposal = useCallback(async (contractType: ContractType) => {
     if (!currentSymbol || !amount || !duration) return
@@ -39,6 +71,7 @@ const TradingPanel: React.FC = () => {
         duration: parseInt(duration),
         duration_unit: durationUnit,
         currency: "USD",
+        ...(barrier !== null && { barrier: barrier.toString() }),
       }
       const result = await api.getProposal(params)
       setProposal({ id: result.id, ask_price: result.ask_price, payout: result.payout })
@@ -48,7 +81,7 @@ const TradingPanel: React.FC = () => {
     } finally {
       setIsTrading(false)
     }
-  }, [currentSymbol, amount, duration, durationUnit, setIsTrading])
+  }, [currentSymbol, amount, duration, durationUnit, setIsTrading, barrier])
 
   const executeTrade = useCallback(async (contractType: ContractType) => {
     if (!proposal) {
@@ -81,6 +114,22 @@ const TradingPanel: React.FC = () => {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Contract Type</label>
+          <div className="flex gap-1 p-1 bg-muted rounded-lg">
+            {contractCategoryOptions.map((option) => (
+              <Button
+                key={option.value}
+                variant={contractCategory === option.value ? "default" : "ghost"}
+                size="sm"
+                onClick={() => { setContractCategory(option.value); setProposal(null) }}
+                className="flex-1 text-xs"
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+        </div>
         <div className="space-y-2">
           <label className="text-sm font-medium">Stake Amount (USD)</label>
           <Input type="text" inputMode="decimal" placeholder="10.00" value={amount}
@@ -115,14 +164,42 @@ const TradingPanel: React.FC = () => {
           <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
         )}
         <div className="grid grid-cols-2 gap-3">
-          <Button variant="profit" size="xl" onClick={() => executeTrade("CALL")} disabled={isTrading || !currentSymbol} className="flex items-center gap-2">
-            {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <TrendingUp className="h-5 w-5" />}
-            <div className="flex flex-col"><span className="text-base font-bold">RISE</span><span className="text-xs opacity-80">Higher</span></div>
-          </Button>
-          <Button variant="loss" size="xl" onClick={() => executeTrade("PUT")} disabled={isTrading || !currentSymbol} className="flex items-center gap-2">
-            {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <TrendingDown className="h-5 w-5" />}
-            <div className="flex flex-col"><span className="text-base font-bold">FALL</span><span className="text-xs opacity-80">Lower</span></div>
-          </Button>
+          {contractCategory === "RISE_FALL" && (
+            <>
+              <Button variant="profit" size="xl" onClick={() => executeTrade("CALL")} disabled={isTrading || !currentSymbol} className="flex items-center gap-2">
+                {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <TrendingUp className="h-5 w-5" />}
+                <div className="flex flex-col"><span className="text-base font-bold">RISE</span><span className="text-xs opacity-80">Price goes up</span></div>
+              </Button>
+              <Button variant="loss" size="xl" onClick={() => executeTrade("PUT")} disabled={isTrading || !currentSymbol} className="flex items-center gap-2">
+                {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <TrendingDown className="h-5 w-5" />}
+                <div className="flex flex-col"><span className="text-base font-bold">FALL</span><span className="text-xs opacity-80">Price goes down</span></div>
+              </Button>
+            </>
+          )}
+          {contractCategory === "HIGHER_LOWER" && (
+            <>
+              <Button variant="profit" size="xl" onClick={() => executeTrade("CALL")} disabled={isTrading || !currentSymbol} className="flex items-center gap-2">
+                {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <TrendingUp className="h-5 w-5" />}
+                <div className="flex flex-col"><span className="text-base font-bold">HIGHER</span><span className="text-xs opacity-80">Above barrier</span></div>
+              </Button>
+              <Button variant="loss" size="xl" onClick={() => executeTrade("PUT")} disabled={isTrading || !currentSymbol} className="flex items-center gap-2">
+                {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <TrendingDown className="h-5 w-5" />}
+                <div className="flex flex-col"><span className="text-base font-bold">LOWER</span><span className="text-xs opacity-80">Below barrier</span></div>
+              </Button>
+            </>
+          )}
+          {contractCategory === "TOUCH_NO_TOUCH" && (
+            <>
+              <Button variant="profit" size="xl" onClick={() => executeTrade("ONETOUCH")} disabled={isTrading || !currentSymbol} className="flex items-center gap-2">
+                {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Target className="h-5 w-5" />}
+                <div className="flex flex-col"><span className="text-base font-bold">TOUCH</span><span className="text-xs opacity-80">Touches barrier</span></div>
+              </Button>
+              <Button variant="loss" size="xl" onClick={() => executeTrade("NOTOUCH")} disabled={isTrading || !currentSymbol} className="flex items-center gap-2">
+                {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Target className="h-5 w-5" />}
+                <div className="flex flex-col"><span className="text-base font-bold">NO TOUCH</span><span className="text-xs opacity-80">Won't touch</span></div>
+              </Button>
+            </>
+          )}
         </div>
         <div className="flex gap-2">
           {["5", "10", "25", "50", "100"].map((quickAmount) => (

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, memo } from "react"
-import { createChart, CandlestickSeries } from "lightweight-charts"
-import type { IChartApi, ISeriesApi, CandlestickData, Time } from "lightweight-charts"
+import { createChart, CandlestickSeries, LineSeries } from "lightweight-charts"
+import type { IChartApi, ISeriesApi, CandlestickData, Time, LineData } from "lightweight-charts"
 import { useTradingStore } from "../../stores/tradingStore"
 import { cn } from "../../lib/utils"
 
@@ -12,7 +12,8 @@ const TickChart: React.FC<TickChartProps> = memo(({ className }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null)
-  const { tickHistory, currentSymbol } = useTradingStore()
+  const barrierSeriesRef = useRef<ISeriesApi<"Line"> | null>(null)
+  const { tickHistory, currentSymbol, barrier } = useTradingStore()
 
   useEffect(() => {
     if (!chartContainerRef.current) return
@@ -48,8 +49,16 @@ const TickChart: React.FC<TickChartProps> = memo(({ className }) => {
       wickDownColor: "hsl(0, 72.2%, 50.6%)",
     })
 
+    const barrierSeries = chart.addSeries(LineSeries, {
+      color: "hsl(47.9, 95.8%, 53.1%)",
+      lineWidth: 2,
+      lineStyle: 2, // Dashed line
+      priceScaleId: "right",
+    })
+
     chartRef.current = chart
     seriesRef.current = candlestickSeries
+    barrierSeriesRef.current = barrierSeries
 
     const handleResize = () => {
       if (chartContainerRef.current) {
@@ -100,6 +109,29 @@ const TickChart: React.FC<TickChartProps> = memo(({ className }) => {
       seriesRef.current.setData([])
     }
   }, [currentSymbol])
+
+  useEffect(() => {
+    if (!barrierSeriesRef.current || tickHistory.length === 0) return
+
+    if (barrier === null) {
+      barrierSeriesRef.current.setData([])
+      return
+    }
+
+    // Create a horizontal line at the barrier price level
+    const barrierData: LineData<Time>[] = []
+    const firstTick = tickHistory[0]
+    const lastTick = tickHistory[tickHistory.length - 1]
+
+    if (firstTick && lastTick) {
+      barrierData.push(
+        { time: firstTick.epoch as Time, value: barrier },
+        { time: lastTick.epoch as Time, value: barrier }
+      )
+    }
+
+    barrierSeriesRef.current.setData(barrierData)
+  }, [barrier, tickHistory])
 
   return (
     <div

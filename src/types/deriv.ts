@@ -235,7 +235,7 @@ export type DerivMessage =
   | { error: { code: string; message: string; details?: any } }
 
 // Trading Types
-export type ContractType = "CALL" | "PUT" | "RISE" | "FALL"
+export type ContractType = "CALL" | "PUT" | "RISE" | "FALL" | "ONETOUCH" | "NOTOUCH"
 export type Basis = "stake" | "payout"
 export type DurationUnit = "t" | "s" | "m" | "h" | "d"
 
@@ -247,6 +247,7 @@ export interface TradeParams {
   duration: number
   duration_unit: DurationUnit
   currency?: string
+  barrier?: string
 }
 
 export interface TradeResult {
