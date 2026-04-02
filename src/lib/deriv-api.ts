@@ -7,6 +7,7 @@ import type {
   ProposalOpenContractResponse,
   BalanceResponse,
   TradeParams,
+  ContractsForResponse,
 } from "../types/deriv"
 
 const DERIV_APP_ID = import.meta.env.VITE_DERIV_APP_ID || "1089"
@@ -386,6 +387,25 @@ class DerivAPI {
     }
   }
 
+  // Unsubscribe from all tick streams - used for clean symbol switching
+  async unsubscribeTicks(): Promise<void> {
+    // Remove all tick subscriptions from activeSubscriptions
+    const tickSubscriptions = Array.from(this.activeSubscriptions.entries())
+      .filter(([_, sub]) => sub.type === 'ticks')
+    
+    tickSubscriptions.forEach(([key, _]) => {
+      this.activeSubscriptions.delete(key)
+    })
+
+    // Send forget_all to the API
+    this.send({
+      forget_all: "ticks",
+    })
+
+    // Small delay to ensure the API processes the unsubscribe
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+
   async getTickHistory(symbol: string, count: number = 100): Promise<{ prices: number[]; times: number[] }> {
     const reqId = this.getNextReqId()
 
@@ -442,6 +462,7 @@ class DerivAPI {
         duration_unit: params.duration_unit,
         symbol: params.symbol,
         req_id: reqId,
+        ...(params.barrier && { barrier: params.barrier }),
       })
 
       setTimeout(() => {
@@ -567,6 +588,35 @@ class DerivAPI {
 
       this.send({
         time: 1,
+        req_id: reqId,
+      })
+
+      setTimeout(() => {
+        if (this.pendingRequests.has(reqId)) {
+          this.pendingRequests.delete(reqId)
+          reject(new Error("Request timeout"))
+        }
+      }, 10000)
+    })
+  }
+
+  async getContractsFor(symbol: string): Promise<ContractsForResponse["contracts_for"]> {
+    const reqId = this.getNextReqId()
+
+    return new Promise((resolve, reject) => {
+      this.pendingRequests.set(reqId, {
+        resolve: (data: ContractsForResponse) => {
+          if (data.contracts_for) {
+            resolve(data.contracts_for)
+          } else {
+            reject(new Error("Failed to get contracts for symbol"))
+          }
+        },
+        reject,
+      })
+
+      this.send({
+        contracts_for: symbol,
         req_id: reqId,
       })
 

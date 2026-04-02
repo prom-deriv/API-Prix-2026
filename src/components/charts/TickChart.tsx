@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, memo } from "react"
-import { createChart, CandlestickSeries, LineSeries } from "lightweight-charts"
-import type { IChartApi, ISeriesApi, CandlestickData, Time, LineData } from "lightweight-charts"
+import { createChart, CandlestickSeries } from "lightweight-charts"
+import type { IChartApi, ISeriesApi, CandlestickData, Time, CreatePriceLineOptions } from "lightweight-charts"
 import { useTradingStore } from "../../stores/tradingStore"
 import { cn } from "../../lib/utils"
 
@@ -12,8 +12,8 @@ const TickChart: React.FC<TickChartProps> = memo(({ className }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null)
-  const barrierSeriesRef = useRef<ISeriesApi<"Line"> | null>(null)
-  const { tickHistory, currentSymbol, barrier } = useTradingStore()
+  const barrierLineRef = useRef<ReturnType<ISeriesApi<"Candlestick">["createPriceLine"]> | null>(null)
+  const { tickHistory, currentSymbol, barrier, isSymbolLoading } = useTradingStore()
 
   useEffect(() => {
     if (!chartContainerRef.current) return
@@ -49,16 +49,8 @@ const TickChart: React.FC<TickChartProps> = memo(({ className }) => {
       wickDownColor: "hsl(0, 72.2%, 50.6%)",
     })
 
-    const barrierSeries = chart.addSeries(LineSeries, {
-      color: "hsl(47.9, 95.8%, 53.1%)",
-      lineWidth: 2,
-      lineStyle: 2, // Dashed line
-      priceScaleId: "right",
-    })
-
     chartRef.current = chart
     seriesRef.current = candlestickSeries
-    barrierSeriesRef.current = barrierSeries
 
     const handleResize = () => {
       if (chartContainerRef.current) {
@@ -78,6 +70,7 @@ const TickChart: React.FC<TickChartProps> = memo(({ className }) => {
     }
   }, [])
 
+  // Update candlestick data from tick history
   useEffect(() => {
     if (!seriesRef.current || tickHistory.length === 0) return
 
@@ -97,48 +90,83 @@ const TickChart: React.FC<TickChartProps> = memo(({ className }) => {
       candleData.push({ time, open, high, low, close })
     }
 
-    seriesRef.current.setData(candleData)
+    // Sort by time to ensure strictly ascending order (required by Lightweight Charts)
+    candleData.sort((a, b) => (a.time as number) - (b.time as number))
+    
+    // Remove duplicate time entries (defensive measure)
+    const uniqueCandleData = candleData.filter((candle, index) => {
+      if (index === 0) return true
+      return candle.time !== candleData[index - 1].time
+    })
 
-    if (chartRef.current && candleData.length > 0) {
+    seriesRef.current.setData(uniqueCandleData)
+
+    if (chartRef.current && uniqueCandleData.length > 0) {
       chartRef.current.timeScale().scrollToRealTime()
     }
   }, [tickHistory])
 
+  // Clear chart data and reset scale when symbol changes
   useEffect(() => {
     if (seriesRef.current) {
       seriesRef.current.setData([])
     }
+    // Reset chart time scale to auto-fit new data
+    if (chartRef.current) {
+      chartRef.current.timeScale().resetTimeScale()
+      chartRef.current.timeScale().scrollToRealTime()
+    }
   }, [currentSymbol])
 
+  // Barrier price line — uses createPriceLine for a full-width horizontal line
   useEffect(() => {
-    if (!barrierSeriesRef.current || tickHistory.length === 0) return
+    if (!seriesRef.current) return
 
-    if (barrier === null) {
-      barrierSeriesRef.current.setData([])
-      return
+    // Remove existing barrier line if any
+    if (barrierLineRef.current) {
+      try {
+        seriesRef.current.removePriceLine(barrierLineRef.current)
+      } catch {
+        // Line may already be removed if series was reset
+      }
+      barrierLineRef.current = null
     }
 
-    // Create a horizontal line at the barrier price level
-    // The barrier is already calculated as absolute price (currentPrice + offset)
-    const barrierData: LineData<Time>[] = []
-    const firstTick = tickHistory[0]
-    const lastTick = tickHistory[tickHistory.length - 1]
+    // If no barrier or no data, don't draw
+    if (barrier === null || tickHistory.length === 0) return
 
-    if (firstTick && lastTick) {
-      barrierData.push(
-        { time: firstTick.epoch as Time, value: barrier },
-        { time: lastTick.epoch as Time, value: barrier }
-      )
+    // Create a price line at the barrier level
+    const priceLineOptions: CreatePriceLineOptions = {
+      price: barrier,
+      color: "hsl(47.9, 95.8%, 53.1%)", // Yellow/gold color
+      lineWidth: 2,
+      lineStyle: 2, // Dashed
+      axisLabelVisible: true,
+      title: "Barrier",
     }
 
-    barrierSeriesRef.current.setData(barrierData)
+    barrierLineRef.current = seriesRef.current.createPriceLine(priceLineOptions)
   }, [barrier, tickHistory])
 
   return (
-    <div
-      ref={chartContainerRef}
-      className={cn("w-full h-full min-h-[300px]", className)}
-    />
+    <div className={cn("w-full h-full min-h-[300px] relative", className)}>
+      <div
+        ref={chartContainerRef}
+        className="w-full h-full"
+      />
+      {/* Loading shimmer overlay */}
+      {isSymbolLoading && (
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="relative">
+              <div className="w-12 h-12 border-4 border-muted rounded-full"></div>
+              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+            </div>
+            <p className="text-sm text-muted-foreground animate-pulse">Loading chart data...</p>
+          </div>
+        </div>
+      )}
+    </div>
   )
 })
 

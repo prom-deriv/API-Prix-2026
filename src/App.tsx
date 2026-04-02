@@ -1,12 +1,13 @@
-import React, { useEffect, useCallback } from "react"
+import { useEffect, useCallback, useRef } from "react"
 import { getDerivAPI } from "./lib/deriv-api"
 import { useTradingStore } from "./stores/tradingStore"
 import TickChart from "./components/charts/TickChart"
 import TradingPanel from "./components/trading/TradingPanel"
 import AccountSnapshot from "./components/account/AccountSnapshot"
+import AssetSelector from "./components/trading/AssetSelector"
+import ErrorBoundary from "./components/ui/ErrorBoundary"
 import { Card, CardContent } from "./components/ui/card"
 import { Button } from "./components/ui/button"
-import { Select } from "./components/ui/select"
 import { formatNumber, formatPercentage } from "./lib/utils"
 import { Wifi, WifiOff, RefreshCw, TrendingUp, TrendingDown } from "lucide-react"
 
@@ -21,11 +22,16 @@ function App() {
     isConnecting,
     error,
     setSymbols,
-    setCurrentSymbol,
     setCurrentTick,
     setTickHistory,
     setConnectionState,
+    setIsSymbolLoading,
   } = useTradingStore()
+
+  // Store the unsubscribe function for ticks
+  const tickUnsubscribeRef = useRef<(() => void) | null>(null)
+  // Track the current symbol being loaded to prevent race conditions
+  const loadingSymbolRef = useRef<string | null>(null)
 
   const initializeAPI = useCallback(async () => {
     setConnectionState({ isConnecting: true, error: null })
@@ -55,7 +61,9 @@ function App() {
         symbol: currentSymbol,
       }))
       setTickHistory(ticks)
-      api.subscribeTicks(currentSymbol, (tick) => {
+      
+      // Store the unsubscribe function
+      tickUnsubscribeRef.current = api.subscribeTicks(currentSymbol, (tick) => {
         setCurrentTick({ epoch: tick.epoch, quote: tick.quote, symbol: tick.symbol })
       })
     } catch (err) {
@@ -98,34 +106,92 @@ function App() {
   // Cleanup only on unmount
   useEffect(() => {
     return () => { 
+      // Clean up tick subscription
+      if (tickUnsubscribeRef.current) {
+        tickUnsubscribeRef.current()
+      }
       getDerivAPI().disconnect() 
     }
   }, [])
 
-  const handleSymbolChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newSymbol = e.target.value
-    setCurrentSymbol(newSymbol)
-    const api = getDerivAPI()
-    api.subscribeTicks(newSymbol, (tick) => {
-      setCurrentTick({ epoch: tick.epoch, quote: tick.quote, symbol: tick.symbol })
-    })
-    api.getTickHistory(newSymbol, 1000).then((history) => {
-      const ticks = history.prices.map((price, i) => ({
-        epoch: history.times[i],
-        quote: price,
-        symbol: newSymbol,
-      }))
-      setTickHistory(ticks)
-    })
-  }, [setCurrentSymbol, setCurrentTick, setTickHistory])
+  // Handle symbol changes after initialization
+  useEffect(() => {
+    const handleSymbolChange = async () => {
+      // Skip if this is the initial load (handled by initializeAPI)
+      if (!isConnected) return
+      
+      // Prevent race conditions - track which symbol we're loading
+      const symbolToLoad = currentSymbol
+      loadingSymbolRef.current = symbolToLoad
+      
+      // Set loading state
+      setIsSymbolLoading(true)
+      
+      const api = getDerivAPI()
+      
+      // Clean up previous tick subscription
+      if (tickUnsubscribeRef.current) {
+        tickUnsubscribeRef.current()
+        tickUnsubscribeRef.current = null
+      }
+      
+      // Unsubscribe from all ticks to ensure clean state
+      await api.unsubscribeTicks()
+      
+      // Check if we're still loading the same symbol (user didn't click again)
+      if (loadingSymbolRef.current !== symbolToLoad) {
+        console.log("[App] Symbol changed during load, aborting:", symbolToLoad)
+        return
+      }
+      
+      try {
+        // Fetch new tick history
+        const history = await api.getTickHistory(symbolToLoad, 1000)
+        
+        // Check again if we're still loading the same symbol
+        if (loadingSymbolRef.current !== symbolToLoad) {
+          console.log("[App] Symbol changed during history fetch, aborting:", symbolToLoad)
+          return
+        }
+        
+        const ticks = history.prices.map((price, i) => ({
+          epoch: history.times[i],
+          quote: price,
+          symbol: symbolToLoad,
+        }))
+        setTickHistory(ticks)
+        
+        // Subscribe to new symbol's ticks
+        tickUnsubscribeRef.current = api.subscribeTicks(symbolToLoad, (tick) => {
+          // Only update if this is still the current symbol
+          if (loadingSymbolRef.current === symbolToLoad) {
+            setCurrentTick({ epoch: tick.epoch, quote: tick.quote, symbol: tick.symbol })
+          }
+        })
+      } catch (err) {
+        console.error("[App] Failed to switch symbol:", err)
+      } finally {
+        // Only clear loading if this is still the current symbol
+        if (loadingSymbolRef.current === symbolToLoad) {
+          setIsSymbolLoading(false)
+        }
+      }
+    }
+    
+    handleSymbolChange()
+  }, [currentSymbol, isConnected, setIsSymbolLoading, setTickHistory, setCurrentTick])
 
-  const symbolOptions = symbols.map((s) => ({ value: s.symbol, label: s.display_name }))
   const currentSymbolData = symbols.find((s) => s.symbol === currentSymbol)
-  const priceChange = tickHistory.length >= 2
-    ? tickHistory[tickHistory.length - 1].quote - tickHistory[tickHistory.length - 2].quote
+  // Safe data access with optional chaining
+  const lastTick = tickHistory?.[tickHistory.length - 1]
+  const secondLastTick = tickHistory?.[tickHistory.length - 2]
+  const firstTick = tickHistory?.[0]
+  
+  const priceChange = lastTick && secondLastTick
+    ? lastTick.quote - secondLastTick.quote
     : 0
-  const priceChangePercent = tickHistory.length >= 2
-    ? ((tickHistory[tickHistory.length - 1].quote - tickHistory[0].quote) / tickHistory[0].quote) * 100
+  const priceChangePercent = lastTick && firstTick && firstTick.quote !== 0
+    ? ((lastTick.quote - firstTick.quote) / firstTick.quote) * 100
     : 0
 
   return (
@@ -143,9 +209,7 @@ function App() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              {symbolOptions.length > 0 && (
-                <Select options={symbolOptions} value={currentSymbol} onChange={handleSymbolChange} className="w-48" />
-              )}
+              <AssetSelector className="w-64" />
               <Button variant="outline" size="sm" onClick={initializeAPI} disabled={isConnecting}>
                 <RefreshCw className={`h-4 w-4 ${isConnecting ? "animate-spin" : ""}`} />
               </Button>
@@ -183,7 +247,9 @@ function App() {
 
             <Card className="h-[400px]">
               <CardContent className="p-0 h-full">
-                <TickChart className="h-full" />
+                <ErrorBoundary>
+                  <TickChart className="h-full" />
+                </ErrorBoundary>
               </CardContent>
             </Card>
 
@@ -192,7 +258,7 @@ function App() {
                 <CardContent className="p-4 text-center">
                   <p className="text-sm text-muted-foreground">High</p>
                   <p className="text-lg font-semibold text-profit">
-                    {tickHistory.length > 0 ? formatNumber(Math.max(...tickHistory.map((t) => t.quote)), 5) : "---"}
+                    {tickHistory?.length > 0 ? formatNumber(Math.max(...tickHistory.map((t) => t?.quote ?? 0)), 5) : "---"}
                   </p>
                 </CardContent>
               </Card>
@@ -200,7 +266,7 @@ function App() {
                 <CardContent className="p-4 text-center">
                   <p className="text-sm text-muted-foreground">Low</p>
                   <p className="text-lg font-semibold text-loss">
-                    {tickHistory.length > 0 ? formatNumber(Math.min(...tickHistory.map((t) => t.quote)), 5) : "---"}
+                    {tickHistory?.length > 0 ? formatNumber(Math.min(...tickHistory.map((t) => t?.quote ?? 0)), 5) : "---"}
                   </p>
                 </CardContent>
               </Card>

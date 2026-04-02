@@ -11,6 +11,7 @@ interface TradingState extends ConnectionState {
   // Symbols
   symbols: ActiveSymbol[]
   currentSymbol: string
+  isSymbolLoading: boolean
   
   // Ticks
   currentTick: Tick | null
@@ -24,10 +25,15 @@ interface TradingState extends ConnectionState {
   
   // Barrier for Higher/Lower and Touch/No Touch
   barrier: number | null
+  barrierOffset: number | null
+  minBarrierOffset: number | null
+  maxBarrierOffset: number | null
+  pipSize: number | null
   
   // Actions
   setSymbols: (symbols: ActiveSymbol[]) => void
   setCurrentSymbol: (symbol: string) => void
+  setIsSymbolLoading: (loading: boolean) => void
   setCurrentTick: (tick: Tick) => void
   addTickToHistory: (tick: Tick) => void
   setTickHistory: (history: Tick[]) => void
@@ -38,6 +44,9 @@ interface TradingState extends ConnectionState {
   removeActiveContract: (contractId: number) => void
   addRecentTrade: (trade: ProfitTable["transactions"][0]) => void
   setBarrier: (barrier: number | null) => void
+  setBarrierOffset: (offset: number | null) => void
+  setBarrierOffsetRange: (min: number | null, max: number | null) => void
+  setPipSize: (pipSize: number | null) => void
   clearState: () => void
 }
 
@@ -47,6 +56,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   // Initial state
   symbols: [],
   currentSymbol: "R_100",
+  isSymbolLoading: false,
   currentTick: null,
   tickHistory: [],
   totalTicksReceived: 0,
@@ -58,15 +68,35 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   error: null,
   lastConnected: null,
   barrier: null,
+  barrierOffset: null,
+  minBarrierOffset: null,
+  maxBarrierOffset: null,
+  pipSize: null,
 
   // Actions
   setSymbols: (symbols) => set({ symbols }),
 
   setCurrentSymbol: (symbol) => set({ currentSymbol: symbol, tickHistory: [], currentTick: null, totalTicksReceived: 0 }),
 
+  setIsSymbolLoading: (loading) => set({ isSymbolLoading: loading }),
+
   setCurrentTick: (tick) => {
     const state = get()
-    const newHistory = [...state.tickHistory, tick]
+    
+    // Check if this epoch already exists in history (deduplication)
+    const existingIndex = state.tickHistory.findIndex(t => t.epoch === tick.epoch)
+    
+    let newHistory: Tick[]
+    if (existingIndex !== -1) {
+      // Update existing tick with same epoch instead of adding duplicate
+      newHistory = [...state.tickHistory]
+      newHistory[existingIndex] = tick
+    } else {
+      // Add new tick and ensure ascending order by epoch
+      newHistory = [...state.tickHistory, tick]
+      // Sort by epoch to maintain strict ascending order
+      newHistory.sort((a, b) => a.epoch - b.epoch)
+    }
     
     // Keep only the last MAX_TICK_HISTORY ticks
     if (newHistory.length > MAX_TICK_HISTORY) {
@@ -82,7 +112,21 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
   addTickToHistory: (tick) => {
     const state = get()
-    const newHistory = [...state.tickHistory, tick]
+    
+    // Check if this epoch already exists in history (deduplication)
+    const existingIndex = state.tickHistory.findIndex(t => t.epoch === tick.epoch)
+    
+    let newHistory: Tick[]
+    if (existingIndex !== -1) {
+      // Update existing tick with same epoch instead of adding duplicate
+      newHistory = [...state.tickHistory]
+      newHistory[existingIndex] = tick
+    } else {
+      // Add new tick and ensure ascending order by epoch
+      newHistory = [...state.tickHistory, tick]
+      // Sort by epoch to maintain strict ascending order
+      newHistory.sort((a, b) => a.epoch - b.epoch)
+    }
     
     if (newHistory.length > MAX_TICK_HISTORY) {
       newHistory.shift()
@@ -123,10 +167,14 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   })),
 
   setBarrier: (barrier) => set({ barrier }),
+  setBarrierOffset: (offset) => set({ barrierOffset: offset }),
+  setBarrierOffsetRange: (min, max) => set({ minBarrierOffset: min, maxBarrierOffset: max }),
+  setPipSize: (pipSize) => set({ pipSize }),
 
   clearState: () => set({
     symbols: [],
     currentSymbol: "R_100",
+    isSymbolLoading: false,
     currentTick: null,
     tickHistory: [],
     totalTicksReceived: 0,
@@ -137,6 +185,11 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     isConnecting: false,
     error: null,
     lastConnected: null,
+    barrier: null,
+    barrierOffset: null,
+    minBarrierOffset: null,
+    maxBarrierOffset: null,
+    pipSize: null,
   }),
 }))
 

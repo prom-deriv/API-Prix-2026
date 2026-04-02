@@ -4,6 +4,7 @@ export interface Tick {
   epoch: number
   quote: number
   symbol: string
+  pip_size?: number
 }
 
 export interface TickHistory {
@@ -326,6 +327,43 @@ export interface ConnectionState {
   isConnecting: boolean
   error: string | null
   lastConnected: number | null
+}
+
+export interface ContractForAvailable {
+  barrier: string | number
+  barrier_choices: string[]
+  barrier_category: string
+  contract_type: string
+  exchange_name: string
+  expiry_type: string
+  market: string
+  max_barrier_offset: string
+  max_contract_duration: string
+  min_barrier_offset: string
+  min_contract_duration: string
+  sentiment: string
+  submarket: string
+  symbol: string
+}
+
+export interface ContractsForResponse {
+  contracts_for: {
+    available: ContractForAvailable[]
+    close: number
+    feed_license: string
+    hit_count: number
+    id: string
+    non_available: Array<{
+      contract_type: string
+      exchange_name: string
+      market: string
+      submarket: string
+      symbol: string
+    }>
+    open: number
+    spot: number
+  }
+  msg_type: "contracts_for"
 }
 
 export interface TradingState {
