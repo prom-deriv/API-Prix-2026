@@ -119,6 +119,7 @@ const TickChart: React.FC<TickChartProps> = memo(({ className }) => {
     }
 
     // Create a horizontal line at the barrier price level
+    // The barrier is already calculated as absolute price (currentPrice + offset)
     const barrierData: LineData<Time>[] = []
     const firstTick = tickHistory[0]
     const lastTick = tickHistory[tickHistory.length - 1]

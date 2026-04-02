@@ -16,6 +16,7 @@ function App() {
     currentSymbol,
     currentTick,
     tickHistory,
+    totalTicksReceived,
     isConnected,
     isConnecting,
     error,
@@ -206,7 +207,7 @@ function App() {
               <Card>
                 <CardContent className="p-4 text-center">
                   <p className="text-sm text-muted-foreground">Ticks</p>
-                  <p className="text-lg font-semibold">{tickHistory.length}</p>
+                  <p className="text-lg font-semibold">{totalTicksReceived}</p>
                 </CardContent>
               </Card>
             </div>

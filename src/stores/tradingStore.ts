@@ -15,6 +15,7 @@ interface TradingState extends ConnectionState {
   // Ticks
   currentTick: Tick | null
   tickHistory: Tick[]
+  totalTicksReceived: number
   
   // Trading
   isTrading: boolean
@@ -48,6 +49,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   currentSymbol: "R_100",
   currentTick: null,
   tickHistory: [],
+  totalTicksReceived: 0,
   isTrading: false,
   activeContracts: [],
   recentTrades: [],
@@ -60,7 +62,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   // Actions
   setSymbols: (symbols) => set({ symbols }),
 
-  setCurrentSymbol: (symbol) => set({ currentSymbol: symbol, tickHistory: [], currentTick: null }),
+  setCurrentSymbol: (symbol) => set({ currentSymbol: symbol, tickHistory: [], currentTick: null, totalTicksReceived: 0 }),
 
   setCurrentTick: (tick) => {
     const state = get()
@@ -73,7 +75,8 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
     set({ 
       currentTick: tick, 
-      tickHistory: newHistory 
+      tickHistory: newHistory,
+      totalTicksReceived: state.totalTicksReceived + 1
     })
   },
 
@@ -126,6 +129,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     currentSymbol: "R_100",
     currentTick: null,
     tickHistory: [],
+    totalTicksReceived: 0,
     isTrading: false,
     activeContracts: [],
     recentTrades: [],

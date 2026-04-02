@@ -54,6 +54,22 @@
 2. **TypeScript Safety**: Comprehensive type definitions
 3. **WebSocket Reconnection**: Exponential backoff with retry limit
 4. **Chart Performance**: 5-second candle grouping, 1000 tick limit
+5. **Barrier Distance Issue**: Implemented relative offsets from Deriv API
+
+### Barrier Precision Fix (April 2, 2026)
+
+**Problem:** Barriers appeared too far from the spot price on the chart because the app was treating barriers as absolute values (e.g., `currentPrice + 10`) instead of relative offsets.
+
+**Attempted Solution:** Implemented **Relative Barriers** using the Deriv API V2 standard with `contracts_for` endpoint.
+
+**Issue:** The `contracts_for` API call caused WebSocket disconnection issues.
+
+**Resolution:** Reverted to original absolute barrier implementation:
+- Higher/Lower: `currentPrice + 10`
+- Touch/No Touch: `currentPrice + 20`
+- Barrier sent as absolute value string to API
+
+**Status:** Using absolute barriers for stability. May revisit relative barriers in future if connection issues are resolved.
 
 ## Security
 - No hardcoded credentials
