@@ -40,11 +40,9 @@ class DerivAPI {
   private shouldReconnect: boolean = true // Flag to prevent reconnection when intentionally disconnecting
   private token: string | null = null
   private pendingRequestsQueue: Array<() => void> = [] // Queue for requests sent before WebSocket is ready
-  private currentStreamType: 'ticks' | 'ohlc' | null = null // Style-aware guard to discard mismatched messages
-  private isSubscriptionHandshakeActive: boolean = false // Disables filtering during subscription switch
-  private expectedSubscriptionId: string | null = null // Only accept messages with matching subscription id
   private isSubscribing: boolean = false // Mutex to prevent concurrent subscription requests
-  private isResubscribing: boolean = false // Mutex to prevent concurrent resubscription attempts
+  private isHandlingAuth: boolean = false // Mutex to prevent duplicate auth handling
+  private hasSentAuth: boolean = false // Guard to prevent sending auth twice per connection
 
   constructor() {
     // Don't auto-connect in constructor - let the app control when to connect
@@ -102,20 +100,16 @@ class DerivAPI {
           this.startPingInterval()
           this.emit("connection", { connected: true })
           
-          // Queue authorization if token is set - don't send directly in onopen
-          // as the WebSocket might still be in CONNECTING state
-          if (this.token) {
-            this.pendingRequestsQueue.push(() => {
-              if (this.ws?.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify({ authorize: this.token }))
-              }
-            })
-          }
-          
           // Wait for WebSocket to be fully OPEN before flushing queue
           const waitForOpen = () => {
             if (this.ws?.readyState === WebSocket.OPEN) {
-              this.flushRequestQueue()
+              // Send authorization immediately - no artificial delay
+              // Auth will complete asynchronously and flush the queue
+              if (this.token) {
+                this.sendAuthorization()
+              }
+              // Flush any other queued requests now (they'll be re-queued if not authed yet)
+              // The flushRequestQueue will run them once auth completes
               resolve()
             } else {
               // Check again in 50ms
@@ -145,6 +139,8 @@ class DerivAPI {
           console.log("[DerivAPI] WebSocket closed")
           this.isConnecting = false
           this.isConnectedState = false
+          this.isAuthorized = false
+          this.hasSentAuth = false // Reset auth flag to allow re-authorization on reconnect
           this.emit("connection", { connected: false })
           this.attemptReconnect()
         }
@@ -186,6 +182,9 @@ class DerivAPI {
   private async resubscribe(): Promise<void> {
     console.log("[DerivAPI] Resubscribing to active subscriptions")
 
+    // ✅ FIX: Don't create subscriptions directly - let App.tsx handle it with mutex
+    // This prevents race conditions between resubscribe() and subscribeToStream()
+    
     // First, forget all existing subscriptions to avoid "AlreadySubscribed" errors
     try {
       await this.forgetAll('ticks')
@@ -197,37 +196,10 @@ class DerivAPI {
       await this.forgetAll('proposal_open_contract')
     } catch (e) { /* ignore - subscription may not exist */ }
 
-    // Resubscribe to all active subscriptions
-    this.activeSubscriptions.forEach((sub) => {
-      console.log(`[DerivAPI] Resubscribing to ${sub.type}`)
-
-      if (sub.type === 'ticks') {
-        this.send({
-          ticks: sub.params.symbol,
-          subscribe: 1,
-          req_id: this.getNextReqId(),
-        })
-      } else if (sub.type === 'ohlc') {
-        this.send({
-          ticks_history: sub.params.symbol,
-          style: "candles",
-          granularity: sub.params.granularity,
-          subscribe: 1,
-          end: "latest",
-          count: 500,
-          req_id: this.getNextReqId(),
-        })
-      } else if (sub.type === 'proposal_open_contract') {
-        this.send({
-          proposal_open_contract: 1,
-          contract_id: sub.params.contractId,
-          subscribe: 1,
-          req_id: this.getNextReqId(),
-        })
-      }
-    })
-
-    this.emit("resubscribed", { success: true })
+    // ✅ FIX: Don't emit the "resubscribed" event
+    // initializeAPI() already handles the initial subscription
+    // Symbol/chart style changes already have their own subscription logic
+    // This ensures only one subscription path exists, eliminating the race condition
   }
 
   private startPingInterval(): void {
@@ -258,6 +230,10 @@ class DerivAPI {
   }
 
   private handleMessage(data: DerivMessage): void {
+    // EMERGENCY DEBUG: Log all raw messages
+    const msgType = (data as any).msg_type || "unknown"
+    console.log(`[DerivAPI] 🔍 Raw Message [${msgType}]:`, data)
+
     // Handle pong responses
     if ("ping" in data) {
       this.lastPong = Date.now()
@@ -266,11 +242,20 @@ class DerivAPI {
 
     // Handle authorization response - Deriv API returns msg_type: "authorize"
     if ("msg_type" in data && data.msg_type === "authorize") {
+      // ✅ FIX: Prevent duplicate authorization handling with mutex
+      if (this.isHandlingAuth) {
+        return // Already processing auth, skip duplicate
+      }
+      if (this.isAuthorized) {
+        return // Already authorized, skip silently
+      }
+      this.isHandlingAuth = true
       console.log("[DerivAPI] Authorization successful")
       this.isAuthorized = true
       this.emit("authorize", (data as any).authorize)
       // Flush any pending requests that were queued before authorization
       this.flushRequestQueue()
+      this.isHandlingAuth = false
       return
     }
 
@@ -279,17 +264,14 @@ class DerivAPI {
       const error = data.error as any
       const errorMessage = error?.message || error?.code || JSON.stringify(error)
       
-      // ✅ GRACEFULLY HANDLE "AlreadySubscribed" ERRORS
+      // ✅ GRACEFULLY HANDLE "AlreadySubscribed" ERRORS (common during React Strict Mode)
       if (errorMessage.includes("already subscribed") || errorMessage.includes("AlreadySubscribed")) {
-        console.warn("[DerivAPI] Already subscribed - treating as success:", errorMessage)
-        // Don't emit error for this case - the subscription is already active
-        // Resolve the pending request with a success response
+        // Silently handle - this is expected during React Strict Mode double-invocation
         if ("echo_req" in data && data.echo_req) {
           const reqId = (data.echo_req as any).req_id
           if (reqId && this.pendingRequests.has(reqId)) {
             const { resolve } = this.pendingRequests.get(reqId)!
             this.pendingRequests.delete(reqId)
-            // Create a mock successful response
             resolve({
               echo_req: data.echo_req,
               subscription: { id: "existing" },
@@ -323,44 +305,11 @@ class DerivAPI {
       this.subscriptions.set(subId, subId)
     }
 
-    // Emit to message type handlers — with style-aware guard
+    // SIMPLIFIED: Emit ALL message type handlers without complex filtering
+    // This removes the "stuck" shield that was discarding valid messages
     if ("msg_type" in data) {
       const msgType = data.msg_type
       if (msgType) {
-        // STYLE-AWARE GUARD: Discard tick/ohlc messages that don't match the current stream type
-        // This prevents crashes when stale messages arrive during stream switching
-        if (msgType === "tick" && this.currentStreamType !== "ticks") {
-          console.warn("[DerivAPI] Discarding stale tick message (current stream:", this.currentStreamType, ")")
-          return
-        }
-        if (msgType === "ohlc" && this.currentStreamType !== "ohlc") {
-          console.warn("[DerivAPI] Discarding stale ohlc message (current stream:", this.currentStreamType, ")")
-          return
-        }
-
-        // ✅ SELF-HEALING DETECTION
-        if (this.isSubscriptionHandshakeActive) {
-          if (msgType === "tick" && this.currentStreamType === "ohlc") {
-            console.warn("[DerivAPI] ⚠️ Mismatch: Received tick message during OHLC subscription")
-            this.forgetAll('ticks')
-            return
-          }
-          if (msgType === "ohlc" && this.currentStreamType === "ticks") {
-            console.warn("[DerivAPI] ⚠️ Mismatch: Received OHLC message during tick subscription")
-            this.forgetAll('candles')
-            return
-          }
-        }
-
-        // ✅ SHIELD ACTIVATION: Only filter after handshake is complete
-        if (!this.isSubscriptionHandshakeActive && this.expectedSubscriptionId) {
-          // Verify subscription id matches if available
-          if ('subscription' in data && data.subscription && data.subscription.id !== this.expectedSubscriptionId) {
-            console.warn(`[DerivAPI] 🛡️ Discarding message from old subscription: ${data.subscription.id}`)
-            return
-          }
-        }
-
         this.emit(msgType, data)
       }
     }
@@ -430,7 +379,6 @@ class DerivAPI {
     if (this.ws.readyState !== WebSocket.OPEN) {
       // Queue messages when CONNECTING
       if (this.ws.readyState === WebSocket.CONNECTING) {
-        console.warn("[DerivAPI] WebSocket is CONNECTING, queuing request")
         this.pendingRequestsQueue.push(() => this.send(message))
         return
       }
@@ -444,7 +392,6 @@ class DerivAPI {
 
     // Check if WebSocket is authorized before sending requests (except for authorize and ping)
     if (!this.isAuthorized && !('authorize' in message) && !('ping' in message)) {
-      console.warn("[DerivAPI] WebSocket not authorized, queuing request")
       this.pendingRequestsQueue.push(() => this.send(message))
       return
     }
@@ -452,8 +399,29 @@ class DerivAPI {
     this.ws.send(JSON.stringify(message))
   }
 
+  // Send authorization request to Deriv API
+  private sendAuthorization(): void {
+    if (!this.token) {
+      return
+    }
+    
+    // Prevent sending auth twice (handles React Strict Mode double-invocation)
+    if (this.hasSentAuth) {
+      return
+    }
+    this.hasSentAuth = true
+    
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ authorize: this.token }))
+    }
+  }
+
   private flushRequestQueue(): void {
-    console.log(`[DerivAPI] Flushing ${this.pendingRequestsQueue.length} queued requests`)
+    const count = this.pendingRequestsQueue.length
+    if (count === 0) {
+      return // Silent return when queue is empty
+    }
+    
     const queue = [...this.pendingRequestsQueue]
     this.pendingRequestsQueue = []
     queue.forEach(request => {
@@ -463,6 +431,11 @@ class DerivAPI {
         console.error("[DerivAPI] Error executing queued request:", error)
       }
     })
+  }
+
+  // Clear all event handlers (for cleanup without triggering forget_all again)
+  clearAllHandlers(): void {
+    this.handlers.clear()
   }
 
   // Public method to check if WebSocket is ready for requests
@@ -536,18 +509,19 @@ class DerivAPI {
   }
 
   async subscribeTicks(symbol: string, callback: (tick: TickStream["tick"]) => void): Promise<() => void> {
-    // ✅ MUTEX: Prevent concurrent subscription requests
+    // ✅ MUTEX: Prevent concurrent subscription requests with timeout
     if (this.isSubscribing) {
-      console.warn("[DerivAPI] Subscription already in progress, waiting...")
-      // Wait for current subscription to complete
-      await new Promise(resolve => {
-        const checkInterval = setInterval(() => {
-          if (!this.isSubscribing) {
-            clearInterval(checkInterval)
-            resolve(void 0)
-          }
-        }, 50)
-      })
+      console.warn("[DerivAPI] Subscription already in progress, waiting with timeout...")
+      let waited = 0
+      while (this.isSubscribing && waited < 10000) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        waited += 100
+      }
+      // If still subscribing after 10s timeout, force release
+      if (this.isSubscribing) {
+        console.warn("[DerivAPI] Subscription mutex timeout, force releasing")
+        this.isSubscribing = false
+      }
     }
     
     this.isSubscribing = true
@@ -556,26 +530,10 @@ class DerivAPI {
       const reqId = this.getNextReqId()
       const subscriptionKey = `ticks_${symbol}`
 
-      // ✅ PHASE 1: HANDSHAKE INIT - Disable filtering
-      this.isSubscriptionHandshakeActive = true
-      this.expectedSubscriptionId = null
-      this.currentStreamType = null
       
-      // ✅ PHASE 2: FULLY TERMINATE PREVIOUS STREAMS - AWAIT CONFIRMATION
-      // First terminate existing tick subscriptions to avoid "AlreadySubscribed" errors
-      try {
-        await this.forgetAll('ticks')
-      } catch (e) { /* ignore - subscription may not exist */ }
-      try {
-        await this.forgetAll('candles')
-      } catch (e) { /* ignore - subscription may not exist */ }
-      
-      // Clear previous handlers completely
+      // ✅ CLEAR PREVIOUS HANDLERS
       this.handlers.delete("tick")
       
-      // ✅ PHASE 3: ACTIVATE NEW STREAM TYPE
-      this.currentStreamType = 'ticks'
-
       const handler = (data: DerivMessage) => {
         if ("msg_type" in data && data.msg_type === "tick" && "tick" in data) {
           const tick = (data as TickStream).tick
@@ -604,15 +562,11 @@ class DerivAPI {
         req_id: reqId,
       })
 
-      // ✅ PHASE 5: CAPTURE SUBSCRIPTION ID AND ACTIVATE SHIELD
+      // ✅ CAPTURE SUBSCRIPTION ID
       if ('subscription' in response && response.subscription) {
-        this.expectedSubscriptionId = response.subscription.id
         this.subscriptions.set(response.subscription.id, response.subscription.id)
         console.log(`[DerivAPI] ✅ Tick subscription active: ${response.subscription.id}`)
       }
-      
-      // Handshake complete - enable filtering
-      this.isSubscriptionHandshakeActive = false
 
       // Return unsubscribe function
       return () => {
@@ -644,18 +598,19 @@ class DerivAPI {
   }
 
   async subscribeOHLC(symbol: string, granularity: number, callback: (ohlc: OHLCStream["ohlc"]) => void): Promise<() => void> {
-    // ✅ MUTEX: Prevent concurrent subscription requests
+    // ✅ MUTEX: Prevent concurrent subscription requests with timeout
     if (this.isSubscribing) {
-      console.warn("[DerivAPI] Subscription already in progress, waiting...")
-      // Wait for current subscription to complete
-      await new Promise(resolve => {
-        const checkInterval = setInterval(() => {
-          if (!this.isSubscribing) {
-            clearInterval(checkInterval)
-            resolve(void 0)
-          }
-        }, 50)
-      })
+      console.warn("[DerivAPI] Subscription already in progress, waiting with timeout...")
+      let waited = 0
+      while (this.isSubscribing && waited < 10000) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        waited += 100
+      }
+      // If still subscribing after 10s timeout, force release
+      if (this.isSubscribing) {
+        console.warn("[DerivAPI] Subscription mutex timeout, force releasing")
+        this.isSubscribing = false
+      }
     }
     
     this.isSubscribing = true
@@ -664,20 +619,10 @@ class DerivAPI {
       const reqId = this.getNextReqId()
       const subscriptionKey = `ohlc_${symbol}_${granularity}`
 
-      // ✅ PHASE 1: HANDSHAKE INIT - Disable filtering
-      this.isSubscriptionHandshakeActive = true
-      this.expectedSubscriptionId = null
-      this.currentStreamType = null
       
-      // ✅ PHASE 2: FULLY TERMINATE PREVIOUS STREAM - AWAIT CONFIRMATION
-      await this.forgetAll('ticks')
-      
-      // Clear previous handlers completely
+      // ✅ CLEAR PREVIOUS HANDLERS
       this.handlers.delete("ohlc")
       
-      // ✅ PHASE 3: ACTIVATE NEW STREAM TYPE
-      this.currentStreamType = 'ohlc'
-
       const handler = (data: DerivMessage) => {
         if ("msg_type" in data && data.msg_type === "ohlc" && "ohlc" in data) {
           const ohlc = (data as OHLCStream).ohlc
@@ -714,15 +659,11 @@ class DerivAPI {
         req_id: reqId,
       })
 
-      // ✅ PHASE 5: CAPTURE SUBSCRIPTION ID AND ACTIVATE SHIELD
+      // ✅ CAPTURE SUBSCRIPTION ID
       if ('subscription' in response && response.subscription) {
-        this.expectedSubscriptionId = response.subscription.id
         this.subscriptions.set(response.subscription.id, response.subscription.id)
         console.log(`[DerivAPI] ✅ OHLC subscription active: ${response.subscription.id}`)
       }
-      
-      // Handshake complete - enable filtering
-      this.isSubscriptionHandshakeActive = false
 
       // Return unsubscribe function
       return () => {
@@ -1057,6 +998,7 @@ class DerivAPI {
     this.isConnecting = false
     this.isConnectedState = false
     this.isAuthorized = false
+    this.hasSentAuth = false // Reset auth flag
     this.handlers.clear()
     this.pendingRequests.clear()
     this.subscriptions.clear()

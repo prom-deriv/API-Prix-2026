@@ -31,6 +31,7 @@ function App() {
     setOHLCHistory,
     setConnectionState,
     setIsSymbolLoading,
+    clearState,
   } = useTradingStore()
 
   // Store the unsubscribe function for ticks and OHLC
@@ -47,17 +48,11 @@ function App() {
 
   // Helper: Subscribe to the correct stream based on chart style
   const subscribeToStream = useCallback(async (symbol: string, style: string) => {
-    // ✅ MUTEX: Prevent concurrent subscription operations
-    if (isSubscribingRef.current) {
-      console.warn("[App] Subscription already in progress, waiting...")
-      await new Promise(resolve => {
-        const checkInterval = setInterval(() => {
-          if (!isSubscribingRef.current) {
-            clearInterval(checkInterval)
-            resolve(void 0)
-          }
-        }, 50)
-      })
+    // ✅ Wait for any in-progress subscription to complete (with reasonable timeout)
+    let waited = 0
+    while (isSubscribingRef.current && waited < 5000) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+      waited += 100
     }
     
     isSubscribingRef.current = true
@@ -65,28 +60,59 @@ function App() {
     try {
       const api = getDerivAPI()
 
+      // ✅ Check if API is ready (connected + authorized)
+      if (!api.isReady()) {
+        console.warn("[App] API not ready, waiting...")
+        // Wait for API to be ready with timeout
+        let apiWaited = 0
+        while (!api.isReady() && apiWaited < 5000) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+          apiWaited += 100
+        }
+        if (!api.isReady()) {
+          console.error("[App] API timed out waiting for readiness")
+          return
+        }
+      }
+
       if (style === 'area' || style === 'line') {
         activeStreamRef.current = 'ticks'
+        // Unsubscribe from OHLC first if active
+        if (ohlcUnsubscribeRef.current) {
+          try { ohlcUnsubscribeRef.current() } catch {}
+          ohlcUnsubscribeRef.current = null
+        }
         tickUnsubscribeRef.current = await api.subscribeTicks(symbol, (tick) => {
           if (loadingSymbolRef.current === symbol || loadingSymbolRef.current === null) {
-            setCurrentTick({ epoch: tick.epoch, quote: tick.quote, symbol: tick.symbol })
+            // ✅ NUMERIC VALIDATION - Prevent chart freeze from non-Number values
+            const quote = Number(tick.quote)
+            const epoch = Number(tick.epoch)
+            if (isNaN(quote) || isNaN(epoch)) return
+            setCurrentTick({ epoch, quote, symbol: tick.symbol })
           }
         })
+        console.log("[App] ✅ Tick subscription successful for:", symbol)
       } else {
         activeStreamRef.current = 'ohlc'
+        // Unsubscribe from ticks first if active
+        if (tickUnsubscribeRef.current) {
+          try { tickUnsubscribeRef.current() } catch {}
+          tickUnsubscribeRef.current = null
+        }
         ohlcUnsubscribeRef.current = await api.subscribeOHLC(symbol, 60, (ohlc) => {
           if (loadingSymbolRef.current === symbol || loadingSymbolRef.current === null) {
-            setCurrentOHLC({
-              open: ohlc.open,
-              high: ohlc.high,
-              low: ohlc.low,
-              close: ohlc.close,
-              epoch: ohlc.epoch,
-              granularity: ohlc.granularity,
-              symbol: ohlc.symbol,
-            })
+            // ✅ NUMERIC VALIDATION - Prevent chart freeze from non-Number values
+            const open = Number(ohlc.open)
+            const high = Number(ohlc.high)
+            const low = Number(ohlc.low)
+            const close = Number(ohlc.close)
+            const epoch = Number(ohlc.epoch)
+            const granularity = Number(ohlc.granularity)
+            if (isNaN(open) || isNaN(high) || isNaN(low) || isNaN(close) || isNaN(epoch)) return
+            setCurrentOHLC({ open, high, low, close, epoch, granularity, symbol: ohlc.symbol })
           }
         })
+        console.log("[App] ✅ OHLC subscription successful for:", symbol)
       }
     } finally {
       // ✅ MUTEX: Release lock
@@ -96,6 +122,8 @@ function App() {
 
   // Helper: Clean up all subscriptions and handlers
   const cleanupSubscriptions = useCallback(async () => {
+    // ✅ FIX: Call unsubscribe refs - they already handle forgetAll() internally
+    // Don't call unsubscribeAll() again to avoid nested forget_all deadlock
     if (tickUnsubscribeRef.current) {
       try {
         tickUnsubscribeRef.current()
@@ -109,8 +137,9 @@ function App() {
       ohlcUnsubscribeRef.current = null
     }
     activeStreamRef.current = null
-    // Nuclear cleanup: clear all handlers AND send forget_all to API
-    await getDerivAPI().unsubscribeAll()
+    // ✅ FIX: Clear handlers directly instead of calling unsubscribeAll (avoid deadlock)
+    const api = getDerivAPI()
+    api.clearAllHandlers()
   }, [])
 
   const initializeAPI = useCallback(async () => {
@@ -188,28 +217,10 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Empty deps - only run once on mount
 
-  // Handle reconnection events
-  useEffect(() => {
-    const api = getDerivAPI()
-    
-    const handleResubscribed = () => {
-      console.log("[App] Resubscribed after reconnection")
-      api.getTickHistory(currentSymbol, 1000).then((history) => {
-        const ticks = history.prices.map((price, i) => ({
-          epoch: history.times[i],
-          quote: price,
-          symbol: currentSymbol,
-        }))
-        setTickHistory(ticks)
-      }).catch(console.error)
-    }
-
-    const unsubscribe = api.on("resubscribed", handleResubscribed)
-    
-    return () => {
-      unsubscribe()
-    }
-  }, [currentSymbol, setTickHistory])
+  // ✅ FIX: Removed handleResubscribed callback
+  // The "resubscribed" event is no longer emitted by deriv-api.ts
+  // initializeAPI() already handles the initial subscription
+  // Symbol/chart style changes already have their own subscription logic
 
   // Run initializeAPI once on mount
   useEffect(() => {
@@ -341,14 +352,21 @@ function App() {
             }))
             setOHLCHistory(ohlcHistory)
           } catch (err) {
-            console.warn("[App] Failed to fetch OHLC history:", err)
+            console.warn("[App] Failed to fetch OHLC history, falling back to tick history:", err)
+            const history = await api.getTickHistory(currentSymbol, 1000)
+            const ticks = history.prices.map((price, i) => ({
+              epoch: history.times[i],
+              quote: price,
+              symbol: currentSymbol,
+            }))
+            setTickHistory(ticks)
           }
         }
       } catch (err) {
         console.error("[App] Failed to fetch history for chart style change:", err)
       }
       
-       // Subscribe to the correct stream
+      // Subscribe to the correct stream
       await subscribeToStream(currentSymbol, chartStyle)
     }
     
@@ -397,7 +415,7 @@ function App() {
             </div>
             <div className="flex items-center gap-4">
               <AssetSelector className="w-64" />
-              <Button variant="outline" size="sm" onClick={initializeAPI} disabled={isConnecting}>
+              <Button variant="outline" size="sm" onClick={() => { clearState(); initializeAPI() }} disabled={isConnecting}>
                 <RefreshCw className={`h-4 w-4 ${isConnecting ? "animate-spin" : ""}`} />
               </Button>
             </div>
@@ -465,8 +483,12 @@ function App() {
               </Card>
               <Card>
                 <CardContent className="p-4 text-center">
-                  <p className="text-sm text-muted-foreground">Ticks</p>
-                  <p className="text-lg font-semibold">{totalTicksReceived}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {chartStyle === 'candlestick' || chartStyle === 'ohlc' ? 'Candles' : 'Ticks'}
+                  </p>
+                  <p className="text-lg font-semibold">
+                    {chartStyle === 'candlestick' || chartStyle === 'ohlc' ? ohlcHistory.length : totalTicksReceived}
+                  </p>
                 </CardContent>
               </Card>
             </div>
