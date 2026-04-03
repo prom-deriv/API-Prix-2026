@@ -54,6 +54,43 @@ class DerivAPI {
     this.token = token
   }
 
+  /**
+   * 🧹 CLEAN SLATE STARTUP - Emergency reset of all subscriptions
+   * Forces termination of ALL ghost subscriptions before any new ones are created
+   * This prevents the "logic deadlock" where stale subscriptions block new data
+   */
+  async cleanSlateStartup(): Promise<void> {
+    // Only run if WebSocket is connected and authorized
+    if (!this.isReady()) {
+      console.warn("[DerivAPI] ⚠️ Not ready for clean slate, skipping")
+      return
+    }
+
+    console.log("[DerivAPI] 🧹 Clean slate startup - clearing all ghost subscriptions...")
+    
+    // Forget BOTH types to ensure no stale subscriptions remain
+    // Use Promise.allSettled so one failure doesn't block the other
+    const results = await Promise.allSettled([
+      this.forgetAll('ticks'),
+      this.forgetAll('candles'),
+      this.forgetAll('proposal_open_contract')
+    ])
+    
+    results.forEach((result, i) => {
+      const types = ['ticks', 'candles', 'proposal_open_contract']
+      if (result.status === 'fulfilled') {
+        console.log(`[DerivAPI] ✅ Cleaned up ${types[i]} subscriptions`)
+      } else {
+        console.warn(`[DerivAPI] ⚠️ ${types[i]} cleanup had issues (expected if none existed)`)
+      }
+    })
+
+    // Clear all handlers to prevent message routing conflicts
+    this.handlers.clear()
+    
+    console.log("[DerivAPI] ✅ Clean slate complete - ready for fresh subscriptions")
+  }
+
   // Public method to initialize connection
   async initialize(): Promise<void> {
     if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {

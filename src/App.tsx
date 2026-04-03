@@ -161,6 +161,14 @@ function App() {
       
       setConnectionState({ isConnected: true, isConnecting: false, lastConnected: Date.now() })
       
+      // 🧹 CLEAN SLATE: Force termination of ALL ghost subscriptions before any new ones
+      // This prevents the "logic deadlock" where stale subscriptions block new data
+      console.log("[App] 🧹 Running clean slate startup...")
+      await api.cleanSlateStartup()
+      
+      // Clear local state to ensure fresh start
+      clearState()
+
       const activeSymbols = await api.getActiveSymbols()
       setSymbols(activeSymbols)
 
