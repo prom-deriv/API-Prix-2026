@@ -33,6 +33,52 @@ export interface TickStream {
   msg_type: "tick"
 }
 
+// OHLC Types for candlestick/OHLC charts
+export interface OHLC {
+  open: number
+  high: number
+  low: number
+  close: number
+  epoch: number
+  granularity: number
+  symbol?: string
+}
+
+export interface OHLCStream {
+  ohlc: {
+    close: number
+    epoch: number
+    granularity: number
+    high: number
+    id: string
+    low: number
+    open: number
+    open_time: number
+    pip_size: number
+    symbol: string
+  }
+  msg_type: "ohlc"
+}
+
+export interface OHLCHistory {
+  echo_req: {
+    ticks_history: string
+    count: number
+    end: string
+    granularity?: number
+  }
+  candles: Array<{
+    close: number
+    epoch: number
+    granularity: number
+    high: number
+    low: number
+    open: number
+    open_time: number
+  }>
+  msg_type: "candles"
+}
+
 export interface ActiveSymbol {
   allow_forward_starting: number
   display_name: string
@@ -217,10 +263,15 @@ export interface TradingTimesResponse {
   msg_type: "trading_times"
 }
 
+// Chart Style Types
+export type ChartStyle = 'area' | 'line' | 'ohlc' | 'candlestick'
+
 // WebSocket Message Types
 export type DerivMessage =
   | TickStream
   | TickHistory
+  | OHLCStream
+  | OHLCHistory
   | ProposalResponse
   | BuyResponse
   | ProposalOpenContractResponse

@@ -1,10 +1,11 @@
 import { useEffect, useCallback, useRef } from "react"
 import { getDerivAPI } from "./lib/deriv-api"
 import { useTradingStore } from "./stores/tradingStore"
-import TickChart from "./components/charts/TickChart"
+import TradingChart from "./components/charts/TradingChart"
 import TradingPanel from "./components/trading/TradingPanel"
 import AccountSnapshot from "./components/account/AccountSnapshot"
 import AssetSelector from "./components/trading/AssetSelector"
+import ChartStyleSelector from "./components/charts/ChartStyleSelector"
 import ErrorBoundary from "./components/ui/ErrorBoundary"
 import { Card, CardContent } from "./components/ui/card"
 import { Button } from "./components/ui/button"
@@ -17,21 +18,100 @@ function App() {
     currentSymbol,
     currentTick,
     tickHistory,
+    ohlcHistory,
     totalTicksReceived,
     isConnected,
     isConnecting,
     error,
+    chartStyle,
     setSymbols,
     setCurrentTick,
     setTickHistory,
+    setCurrentOHLC,
+    setOHLCHistory,
     setConnectionState,
     setIsSymbolLoading,
   } = useTradingStore()
 
-  // Store the unsubscribe function for ticks
+  // Store the unsubscribe function for ticks and OHLC
   const tickUnsubscribeRef = useRef<(() => void) | null>(null)
+  const ohlcUnsubscribeRef = useRef<(() => void) | null>(null)
   // Track the current symbol being loaded to prevent race conditions
   const loadingSymbolRef = useRef<string | null>(null)
+  // CRITICAL: Track whether initial setup is complete to prevent overlapping subscriptions
+  const hasInitializedRef = useRef(false)
+  // Track the currently active stream type to prevent duplicate subscriptions
+  const activeStreamRef = useRef<'ticks' | 'ohlc' | null>(null)
+  // ✅ MUTEX: Prevent concurrent subscription operations
+  const isSubscribingRef = useRef(false)
+
+  // Helper: Subscribe to the correct stream based on chart style
+  const subscribeToStream = useCallback(async (symbol: string, style: string) => {
+    // ✅ MUTEX: Prevent concurrent subscription operations
+    if (isSubscribingRef.current) {
+      console.warn("[App] Subscription already in progress, waiting...")
+      await new Promise(resolve => {
+        const checkInterval = setInterval(() => {
+          if (!isSubscribingRef.current) {
+            clearInterval(checkInterval)
+            resolve(void 0)
+          }
+        }, 50)
+      })
+    }
+    
+    isSubscribingRef.current = true
+    
+    try {
+      const api = getDerivAPI()
+
+      if (style === 'area' || style === 'line') {
+        activeStreamRef.current = 'ticks'
+        tickUnsubscribeRef.current = await api.subscribeTicks(symbol, (tick) => {
+          if (loadingSymbolRef.current === symbol || loadingSymbolRef.current === null) {
+            setCurrentTick({ epoch: tick.epoch, quote: tick.quote, symbol: tick.symbol })
+          }
+        })
+      } else {
+        activeStreamRef.current = 'ohlc'
+        ohlcUnsubscribeRef.current = await api.subscribeOHLC(symbol, 60, (ohlc) => {
+          if (loadingSymbolRef.current === symbol || loadingSymbolRef.current === null) {
+            setCurrentOHLC({
+              open: ohlc.open,
+              high: ohlc.high,
+              low: ohlc.low,
+              close: ohlc.close,
+              epoch: ohlc.epoch,
+              granularity: ohlc.granularity,
+              symbol: ohlc.symbol,
+            })
+          }
+        })
+      }
+    } finally {
+      // ✅ MUTEX: Release lock
+      isSubscribingRef.current = false
+    }
+  }, [setCurrentTick, setCurrentOHLC])
+
+  // Helper: Clean up all subscriptions and handlers
+  const cleanupSubscriptions = useCallback(async () => {
+    if (tickUnsubscribeRef.current) {
+      try {
+        tickUnsubscribeRef.current()
+      } catch {}
+      tickUnsubscribeRef.current = null
+    }
+    if (ohlcUnsubscribeRef.current) {
+      try {
+        ohlcUnsubscribeRef.current()
+      } catch {}
+      ohlcUnsubscribeRef.current = null
+    }
+    activeStreamRef.current = null
+    // Nuclear cleanup: clear all handlers AND send forget_all to API
+    await getDerivAPI().unsubscribeAll()
+  }, [])
 
   const initializeAPI = useCallback(async () => {
     setConnectionState({ isConnecting: true, error: null })
@@ -47,25 +127,57 @@ function App() {
       // Re-enable reconnection for manual refresh
       api.enableReconnection()
       
-      // Initialize the connection (this is now explicit, not auto-connected in constructor)
+      // Initialize the connection
       await api.initialize()
       
       setConnectionState({ isConnected: true, isConnecting: false, lastConnected: Date.now() })
       
       const activeSymbols = await api.getActiveSymbols()
       setSymbols(activeSymbols)
-      const history = await api.getTickHistory(currentSymbol, 1000)
-      const ticks = history.prices.map((price, i) => ({
-        epoch: history.times[i],
-        quote: price,
-        symbol: currentSymbol,
-      }))
-      setTickHistory(ticks)
+
+      // Set the loading symbol ref
+      loadingSymbolRef.current = currentSymbol
+
+      // Fetch appropriate history based on chart style
+      if (chartStyle === 'area' || chartStyle === 'line') {
+        const history = await api.getTickHistory(currentSymbol, 1000)
+        const ticks = history.prices.map((price, i) => ({
+          epoch: history.times[i],
+          quote: price,
+          symbol: currentSymbol,
+        }))
+        setTickHistory(ticks)
+      } else {
+        // Fetch OHLC history for candlestick/OHLC charts
+        try {
+          const ohlcData = await api.getOHLCHistory(currentSymbol, 60, 500)
+          const ohlcHistory = ohlcData.candles.map((c) => ({
+            open: Number(c.open),
+            high: Number(c.high),
+            low: Number(c.low),
+            close: Number(c.close),
+            epoch: c.epoch,
+            granularity: 60,
+            symbol: currentSymbol,
+          }))
+          setOHLCHistory(ohlcHistory)
+        } catch (err) {
+          console.warn("[App] Failed to fetch OHLC history, falling back to tick history:", err)
+          const history = await api.getTickHistory(currentSymbol, 1000)
+          const ticks = history.prices.map((price, i) => ({
+            epoch: history.times[i],
+            quote: price,
+            symbol: currentSymbol,
+          }))
+          setTickHistory(ticks)
+        }
+      }
       
-      // Store the unsubscribe function
-      tickUnsubscribeRef.current = api.subscribeTicks(currentSymbol, (tick) => {
-        setCurrentTick({ epoch: tick.epoch, quote: tick.quote, symbol: tick.symbol })
-      })
+       // Subscribe to the correct stream
+      await subscribeToStream(currentSymbol, chartStyle)
+      
+      // Mark initialization complete AFTER subscribing
+      hasInitializedRef.current = true
     } catch (err) {
       setConnectionState({
         isConnected: false,
@@ -73,7 +185,8 @@ function App() {
         error: err instanceof Error ? err.message : "Connection failed",
       })
     }
-  }, [currentSymbol, setSymbols, setCurrentTick, setTickHistory, setConnectionState])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Empty deps - only run once on mount
 
   // Handle reconnection events
   useEffect(() => {
@@ -81,7 +194,6 @@ function App() {
     
     const handleResubscribed = () => {
       console.log("[App] Resubscribed after reconnection")
-      // Refresh tick history after reconnection
       api.getTickHistory(currentSymbol, 1000).then((history) => {
         const ticks = history.prices.map((price, i) => ({
           epoch: history.times[i],
@@ -99,6 +211,7 @@ function App() {
     }
   }, [currentSymbol, setTickHistory])
 
+  // Run initializeAPI once on mount
   useEffect(() => {
     initializeAPI()
   }, [initializeAPI])
@@ -106,9 +219,11 @@ function App() {
   // Cleanup only on unmount
   useEffect(() => {
     return () => { 
-      // Clean up tick subscription
       if (tickUnsubscribeRef.current) {
         tickUnsubscribeRef.current()
+      }
+      if (ohlcUnsubscribeRef.current) {
+        ohlcUnsubscribeRef.current()
       }
       getDerivAPI().disconnect() 
     }
@@ -116,62 +231,68 @@ function App() {
 
   // Handle symbol changes after initialization
   useEffect(() => {
+    // CRITICAL: Skip if initialization hasn't completed yet
+    if (!hasInitializedRef.current) return
+    if (!isConnected) return
+    
     const handleSymbolChange = async () => {
-      // Skip if this is the initial load (handled by initializeAPI)
-      if (!isConnected) return
-      
-      // Prevent race conditions - track which symbol we're loading
       const symbolToLoad = currentSymbol
       loadingSymbolRef.current = symbolToLoad
-      
-      // Set loading state
       setIsSymbolLoading(true)
       
-      const api = getDerivAPI()
+      // Clean up ALL previous subscriptions (handlers + API)
+      await cleanupSubscriptions()
       
-      // Clean up previous tick subscription
-      if (tickUnsubscribeRef.current) {
-        tickUnsubscribeRef.current()
-        tickUnsubscribeRef.current = null
-      }
-      
-      // Unsubscribe from all ticks to ensure clean state
-      await api.unsubscribeTicks()
-      
-      // Check if we're still loading the same symbol (user didn't click again)
+      // Check if we're still loading the same symbol
       if (loadingSymbolRef.current !== symbolToLoad) {
         console.log("[App] Symbol changed during load, aborting:", symbolToLoad)
         return
       }
       
+      const api = getDerivAPI()
+      
       try {
-        // Fetch new tick history
-        const history = await api.getTickHistory(symbolToLoad, 1000)
-        
-        // Check again if we're still loading the same symbol
-        if (loadingSymbolRef.current !== symbolToLoad) {
-          console.log("[App] Symbol changed during history fetch, aborting:", symbolToLoad)
-          return
+        // Fetch appropriate history based on chart style
+        if (chartStyle === 'area' || chartStyle === 'line') {
+          const history = await api.getTickHistory(symbolToLoad, 1000)
+          if (loadingSymbolRef.current !== symbolToLoad) return
+          const ticks = history.prices.map((price, i) => ({
+            epoch: history.times[i],
+            quote: price,
+            symbol: symbolToLoad,
+          }))
+          setTickHistory(ticks)
+        } else {
+          try {
+            const ohlcData = await api.getOHLCHistory(symbolToLoad, 60, 500)
+            if (loadingSymbolRef.current !== symbolToLoad) return
+            const ohlcHistory = ohlcData.candles.map((c) => ({
+              open: Number(c.open),
+              high: Number(c.high),
+              low: Number(c.low),
+              close: Number(c.close),
+              epoch: c.epoch,
+              granularity: 60,
+              symbol: symbolToLoad,
+            }))
+            setOHLCHistory(ohlcHistory)
+          } catch {
+            const history = await api.getTickHistory(symbolToLoad, 1000)
+            if (loadingSymbolRef.current !== symbolToLoad) return
+            const ticks = history.prices.map((price, i) => ({
+              epoch: history.times[i],
+              quote: price,
+              symbol: symbolToLoad,
+            }))
+            setTickHistory(ticks)
+          }
         }
         
-        const ticks = history.prices.map((price, i) => ({
-          epoch: history.times[i],
-          quote: price,
-          symbol: symbolToLoad,
-        }))
-        setTickHistory(ticks)
-        
-        // Subscribe to new symbol's ticks
-        tickUnsubscribeRef.current = api.subscribeTicks(symbolToLoad, (tick) => {
-          // Only update if this is still the current symbol
-          if (loadingSymbolRef.current === symbolToLoad) {
-            setCurrentTick({ epoch: tick.epoch, quote: tick.quote, symbol: tick.symbol })
-          }
-        })
+         // Subscribe to the correct stream for the new symbol
+        await subscribeToStream(symbolToLoad, chartStyle)
       } catch (err) {
         console.error("[App] Failed to switch symbol:", err)
       } finally {
-        // Only clear loading if this is still the current symbol
         if (loadingSymbolRef.current === symbolToLoad) {
           setIsSymbolLoading(false)
         }
@@ -179,13 +300,79 @@ function App() {
     }
     
     handleSymbolChange()
-  }, [currentSymbol, isConnected, setIsSymbolLoading, setTickHistory, setCurrentTick])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSymbol]) // Only react to symbol changes
+
+  // Handle chart style changes - switch between tick and OHLC streams
+  useEffect(() => {
+    // CRITICAL: Skip if initialization hasn't completed yet
+    if (!hasInitializedRef.current) return
+    if (!isConnected) return
+    
+    const handleChartStyleChange = async () => {
+      console.log("[App] Chart style changed to:", chartStyle)
+      
+      // Clean up ALL previous subscriptions (handlers + API)
+      await cleanupSubscriptions()
+      
+      const api = getDerivAPI()
+      
+      // Fetch appropriate history for the new chart style
+      try {
+        if (chartStyle === 'area' || chartStyle === 'line') {
+          const history = await api.getTickHistory(currentSymbol, 1000)
+          const ticks = history.prices.map((price, i) => ({
+            epoch: history.times[i],
+            quote: price,
+            symbol: currentSymbol,
+          }))
+          setTickHistory(ticks)
+        } else {
+          try {
+            const ohlcData = await api.getOHLCHistory(currentSymbol, 60, 500)
+            const ohlcHistory = ohlcData.candles.map((c) => ({
+              open: Number(c.open),
+              high: Number(c.high),
+              low: Number(c.low),
+              close: Number(c.close),
+              epoch: c.epoch,
+              granularity: 60,
+              symbol: currentSymbol,
+            }))
+            setOHLCHistory(ohlcHistory)
+          } catch (err) {
+            console.warn("[App] Failed to fetch OHLC history:", err)
+          }
+        }
+      } catch (err) {
+        console.error("[App] Failed to fetch history for chart style change:", err)
+      }
+      
+       // Subscribe to the correct stream
+      await subscribeToStream(currentSymbol, chartStyle)
+    }
+    
+    handleChartStyleChange()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartStyle]) // Only react to chart style changes
 
   const currentSymbolData = symbols.find((s) => s.symbol === currentSymbol)
-  // Safe data access with optional chaining
   const lastTick = tickHistory?.[tickHistory.length - 1]
   const secondLastTick = tickHistory?.[tickHistory.length - 2]
   const firstTick = tickHistory?.[0]
+  
+  // Calculate High/Low based on chart style
+  const highValue = chartStyle === 'candlestick' && ohlcHistory?.length > 0
+    ? Math.max(...ohlcHistory.map((c) => c?.high ?? 0))
+    : tickHistory?.length > 0
+      ? Math.max(...tickHistory.map((t) => t?.quote ?? 0))
+      : null
+  
+  const lowValue = chartStyle === 'candlestick' && ohlcHistory?.length > 0
+    ? Math.min(...ohlcHistory.map((c) => c?.low ?? 0))
+    : tickHistory?.length > 0
+      ? Math.min(...tickHistory.map((t) => t?.quote ?? 0))
+      : null
   
   const priceChange = lastTick && secondLastTick
     ? lastTick.quote - secondLastTick.quote
@@ -245,10 +432,16 @@ function App() {
               </CardContent>
             </Card>
 
+            <Card>
+              <CardContent className="p-4">
+                <ChartStyleSelector />
+              </CardContent>
+            </Card>
+            
             <Card className="h-[400px]">
               <CardContent className="p-0 h-full">
                 <ErrorBoundary>
-                  <TickChart className="h-full" />
+                  <TradingChart className="h-full" />
                 </ErrorBoundary>
               </CardContent>
             </Card>
@@ -258,7 +451,7 @@ function App() {
                 <CardContent className="p-4 text-center">
                   <p className="text-sm text-muted-foreground">High</p>
                   <p className="text-lg font-semibold text-profit">
-                    {tickHistory?.length > 0 ? formatNumber(Math.max(...tickHistory.map((t) => t?.quote ?? 0)), 5) : "---"}
+                    {highValue !== null ? formatNumber(highValue, 5) : "---"}
                   </p>
                 </CardContent>
               </Card>
@@ -266,7 +459,7 @@ function App() {
                 <CardContent className="p-4 text-center">
                   <p className="text-sm text-muted-foreground">Low</p>
                   <p className="text-lg font-semibold text-loss">
-                    {tickHistory?.length > 0 ? formatNumber(Math.min(...tickHistory.map((t) => t?.quote ?? 0)), 5) : "---"}
+                    {lowValue !== null ? formatNumber(lowValue, 5) : "---"}
                   </p>
                 </CardContent>
               </Card>

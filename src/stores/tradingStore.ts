@@ -2,9 +2,11 @@ import { create } from "zustand"
 import type {
   ActiveSymbol,
   Tick,
+  OHLC,
   ProposalOpenContract,
   ProfitTable,
   ConnectionState,
+  ChartStyle,
 } from "../types/deriv"
 
 interface TradingState extends ConnectionState {
@@ -17,6 +19,13 @@ interface TradingState extends ConnectionState {
   currentTick: Tick | null
   tickHistory: Tick[]
   totalTicksReceived: number
+  
+  // OHLC Data
+  currentOHLC: OHLC | null
+  ohlcHistory: OHLC[]
+  
+  // Chart Style
+  chartStyle: ChartStyle
   
   // Trading
   isTrading: boolean
@@ -37,6 +46,10 @@ interface TradingState extends ConnectionState {
   setCurrentTick: (tick: Tick) => void
   addTickToHistory: (tick: Tick) => void
   setTickHistory: (history: Tick[]) => void
+  setCurrentOHLC: (ohlc: OHLC) => void
+  addOHLCToHistory: (ohlc: OHLC) => void
+  setOHLCHistory: (history: OHLC[]) => void
+  setChartStyle: (style: ChartStyle) => void
   setConnectionState: (state: Partial<ConnectionState>) => void
   setIsTrading: (isTrading: boolean) => void
   addActiveContract: (contract: ProposalOpenContract) => void
@@ -51,6 +64,7 @@ interface TradingState extends ConnectionState {
 }
 
 const MAX_TICK_HISTORY = 1000
+const MAX_OHLC_HISTORY = 500
 
 export const useTradingStore = create<TradingState>((set, get) => ({
   // Initial state
@@ -60,6 +74,9 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   currentTick: null,
   tickHistory: [],
   totalTicksReceived: 0,
+  currentOHLC: null,
+  ohlcHistory: [],
+  chartStyle: 'area',
   isTrading: false,
   activeContracts: [],
   recentTrades: [],
@@ -76,7 +93,14 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   // Actions
   setSymbols: (symbols) => set({ symbols }),
 
-  setCurrentSymbol: (symbol) => set({ currentSymbol: symbol, tickHistory: [], currentTick: null, totalTicksReceived: 0 }),
+  setCurrentSymbol: (symbol) => set({ 
+    currentSymbol: symbol, 
+    tickHistory: [], 
+    currentTick: null, 
+    totalTicksReceived: 0,
+    ohlcHistory: [],
+    currentOHLC: null,
+  }),
 
   setIsSymbolLoading: (loading) => set({ isSymbolLoading: loading }),
 
@@ -137,6 +161,70 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
   setTickHistory: (history) => set({ tickHistory: history }),
 
+  setCurrentOHLC: (ohlc) => {
+    const state = get()
+    
+    // Check if this epoch already exists in history (deduplication)
+    const existingIndex = state.ohlcHistory.findIndex(o => o.epoch === ohlc.epoch)
+    
+    let newHistory: OHLC[]
+    if (existingIndex !== -1) {
+      // Update existing OHLC with same epoch instead of adding duplicate
+      newHistory = [...state.ohlcHistory]
+      newHistory[existingIndex] = ohlc
+    } else {
+      // Add new OHLC and ensure ascending order by epoch
+      newHistory = [...state.ohlcHistory, ohlc]
+      // Sort by epoch to maintain strict ascending order
+      newHistory.sort((a, b) => a.epoch - b.epoch)
+    }
+    
+    // Keep only the last MAX_OHLC_HISTORY items
+    if (newHistory.length > MAX_OHLC_HISTORY) {
+      newHistory.shift()
+    }
+
+    set({ 
+      currentOHLC: ohlc, 
+      ohlcHistory: newHistory,
+    })
+  },
+
+  addOHLCToHistory: (ohlc) => {
+    const state = get()
+    
+    // Check if this epoch already exists in history (deduplication)
+    const existingIndex = state.ohlcHistory.findIndex(o => o.epoch === ohlc.epoch)
+    
+    let newHistory: OHLC[]
+    if (existingIndex !== -1) {
+      // Update existing OHLC with same epoch instead of adding duplicate
+      newHistory = [...state.ohlcHistory]
+      newHistory[existingIndex] = ohlc
+    } else {
+      // Add new OHLC and ensure ascending order by epoch
+      newHistory = [...state.ohlcHistory, ohlc]
+      // Sort by epoch to maintain strict ascending order
+      newHistory.sort((a, b) => a.epoch - b.epoch)
+    }
+    
+    if (newHistory.length > MAX_OHLC_HISTORY) {
+      newHistory.shift()
+    }
+
+    set({ ohlcHistory: newHistory })
+  },
+
+  setOHLCHistory: (history) => set({ ohlcHistory: history }),
+
+  setChartStyle: (style) => set({ 
+    chartStyle: style,
+    tickHistory: [],
+    ohlcHistory: [],
+    currentTick: null,
+    currentOHLC: null
+  }),
+
   setConnectionState: (connectionState) => set((state) => ({
     ...state,
     ...connectionState,
@@ -178,6 +266,9 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     currentTick: null,
     tickHistory: [],
     totalTicksReceived: 0,
+    currentOHLC: null,
+    ohlcHistory: [],
+    chartStyle: 'area',
     isTrading: false,
     activeContracts: [],
     recentTrades: [],

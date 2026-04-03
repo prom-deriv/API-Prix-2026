@@ -33,7 +33,6 @@ class DerivAPI {
   private isConnecting: boolean = false
   private isConnectedState: boolean = false
   private isAuthorized: boolean = false
-  private hasReceivedOnOpen: boolean = false // Track if onopen event has fired
   private subscriptions: Map<string, string> = new Map() // subscription_id -> req_id
   private activeSubscriptions: Map<string, ActiveSubscription> = new Map() // Track subscriptions for resubscription
   private pingInterval: ReturnType<typeof setInterval> | null = null
@@ -44,6 +43,8 @@ class DerivAPI {
   private currentStreamType: 'ticks' | 'ohlc' | null = null // Style-aware guard to discard mismatched messages
   private isSubscriptionHandshakeActive: boolean = false // Disables filtering during subscription switch
   private expectedSubscriptionId: string | null = null // Only accept messages with matching subscription id
+  private isSubscribing: boolean = false // Mutex to prevent concurrent subscription requests
+  private isResubscribing: boolean = false // Mutex to prevent concurrent resubscription attempts
 
   constructor() {
     // Don't auto-connect in constructor - let the app control when to connect
@@ -94,25 +95,34 @@ class DerivAPI {
           console.log("[DerivAPI] Connected to WebSocket")
           this.isConnecting = false
           this.isConnectedState = true
-          this.hasReceivedOnOpen = true // Mark that onopen has fired
           this.reconnectAttempts = 0
           this.lastPong = Date.now()
-
-          // Send authorization if token is set
-          if (this.token) {
-            this.send({ authorize: this.token })
-          }
 
           // Emit connection event
           this.startPingInterval()
           this.emit("connection", { connected: true })
           
-          // Use setTimeout to flush queue after the current event loop completes
-          // This ensures the WebSocket readyState has fully transitioned to OPEN
-          setTimeout(() => {
-            this.flushRequestQueue()
-            resolve()
-          }, 0)
+          // Queue authorization if token is set - don't send directly in onopen
+          // as the WebSocket might still be in CONNECTING state
+          if (this.token) {
+            this.pendingRequestsQueue.push(() => {
+              if (this.ws?.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({ authorize: this.token }))
+              }
+            })
+          }
+          
+          // Wait for WebSocket to be fully OPEN before flushing queue
+          const waitForOpen = () => {
+            if (this.ws?.readyState === WebSocket.OPEN) {
+              this.flushRequestQueue()
+              resolve()
+            } else {
+              // Check again in 50ms
+              setTimeout(waitForOpen, 50)
+            }
+          }
+          waitForOpen()
         }
 
         this.ws.onmessage = (event) => {
@@ -135,7 +145,6 @@ class DerivAPI {
           console.log("[DerivAPI] WebSocket closed")
           this.isConnecting = false
           this.isConnectedState = false
-          this.hasReceivedOnOpen = false // Reset onopen flag on close
           this.emit("connection", { connected: false })
           this.attemptReconnect()
         }
@@ -267,8 +276,33 @@ class DerivAPI {
 
     // Handle error responses
     if ("error" in data) {
-      console.error("[DerivAPI] API Error:", data.error)
-      this.emit("error", data.error)
+      const error = data.error as any
+      const errorMessage = error?.message || error?.code || JSON.stringify(error)
+      
+      // ✅ GRACEFULLY HANDLE "AlreadySubscribed" ERRORS
+      if (errorMessage.includes("already subscribed") || errorMessage.includes("AlreadySubscribed")) {
+        console.warn("[DerivAPI] Already subscribed - treating as success:", errorMessage)
+        // Don't emit error for this case - the subscription is already active
+        // Resolve the pending request with a success response
+        if ("echo_req" in data && data.echo_req) {
+          const reqId = (data.echo_req as any).req_id
+          if (reqId && this.pendingRequests.has(reqId)) {
+            const { resolve } = this.pendingRequests.get(reqId)!
+            this.pendingRequests.delete(reqId)
+            // Create a mock successful response
+            resolve({
+              echo_req: data.echo_req,
+              subscription: { id: "existing" },
+              msg_type: (data.echo_req as any).ticks ? "tick" : "ohlc"
+            })
+            return
+          }
+        }
+        return
+      }
+      
+      console.error("[DerivAPI] API Error:", errorMessage)
+      this.emit("error", error)
       return
     }
 
@@ -386,17 +420,22 @@ class DerivAPI {
   }
 
   private send(message: object): void {
-    // If we've received onopen, trust that the WebSocket is ready even if readyState is still CONNECTING
-    // This is a browser quirk where readyState doesn't immediately transition to OPEN when onopen fires
-    if (!this.hasReceivedOnOpen && this.ws?.readyState !== WebSocket.OPEN) {
-      // Queue messages when CONNECTING (not just when not authorized)
-      if (this.ws?.readyState === WebSocket.CONNECTING) {
+    // Check if WebSocket exists
+    if (!this.ws) {
+      console.error("[DerivAPI] WebSocket is null")
+      return
+    }
+
+    // Always check readyState before sending - this is critical for avoiding InvalidStateError
+    if (this.ws.readyState !== WebSocket.OPEN) {
+      // Queue messages when CONNECTING
+      if (this.ws.readyState === WebSocket.CONNECTING) {
         console.warn("[DerivAPI] WebSocket is CONNECTING, queuing request")
         this.pendingRequestsQueue.push(() => this.send(message))
         return
       }
       // Log error for truly disconnected states
-      const state = this.ws?.readyState
+      const state = this.ws.readyState
       const stateName = state === WebSocket.CLOSING ? "CLOSING" :
         state === WebSocket.CLOSED ? "CLOSED" : "UNKNOWN"
       console.error(`[DerivAPI] WebSocket is not connected (state: ${stateName})`)
@@ -410,7 +449,7 @@ class DerivAPI {
       return
     }
 
-    this.ws!.send(JSON.stringify(message))
+    this.ws.send(JSON.stringify(message))
   }
 
   private flushRequestQueue(): void {
@@ -497,66 +536,93 @@ class DerivAPI {
   }
 
   async subscribeTicks(symbol: string, callback: (tick: TickStream["tick"]) => void): Promise<() => void> {
-    const reqId = this.getNextReqId()
-    const subscriptionKey = `ticks_${symbol}`
+    // ✅ MUTEX: Prevent concurrent subscription requests
+    if (this.isSubscribing) {
+      console.warn("[DerivAPI] Subscription already in progress, waiting...")
+      // Wait for current subscription to complete
+      await new Promise(resolve => {
+        const checkInterval = setInterval(() => {
+          if (!this.isSubscribing) {
+            clearInterval(checkInterval)
+            resolve(void 0)
+          }
+        }, 50)
+      })
+    }
+    
+    this.isSubscribing = true
+    
+    try {
+      const reqId = this.getNextReqId()
+      const subscriptionKey = `ticks_${symbol}`
 
-    // ✅ PHASE 1: HANDSHAKE INIT - Disable filtering
-    this.isSubscriptionHandshakeActive = true
-    this.expectedSubscriptionId = null
-    this.currentStreamType = null
-    
-    // ✅ PHASE 2: FULLY TERMINATE PREVIOUS STREAM - AWAIT CONFIRMATION
-    await this.forgetAll('candles')
-    
-    // Clear previous handlers completely
-    this.handlers.delete("tick")
-    
-    // ✅ PHASE 3: ACTIVATE NEW STREAM TYPE
-    this.currentStreamType = 'ticks'
+      // ✅ PHASE 1: HANDSHAKE INIT - Disable filtering
+      this.isSubscriptionHandshakeActive = true
+      this.expectedSubscriptionId = null
+      this.currentStreamType = null
+      
+      // ✅ PHASE 2: FULLY TERMINATE PREVIOUS STREAMS - AWAIT CONFIRMATION
+      // First terminate existing tick subscriptions to avoid "AlreadySubscribed" errors
+      try {
+        await this.forgetAll('ticks')
+      } catch (e) { /* ignore - subscription may not exist */ }
+      try {
+        await this.forgetAll('candles')
+      } catch (e) { /* ignore - subscription may not exist */ }
+      
+      // Clear previous handlers completely
+      this.handlers.delete("tick")
+      
+      // ✅ PHASE 3: ACTIVATE NEW STREAM TYPE
+      this.currentStreamType = 'ticks'
 
-    const handler = (data: DerivMessage) => {
-      if ("msg_type" in data && data.msg_type === "tick" && "tick" in data) {
-        const tick = (data as TickStream).tick
-        // ✅ STRICT NUMBER CASTING AT LOWEST LEVEL
-        callback({
-          ...tick,
-          quote: Number(tick.quote),
-          epoch: Number(tick.epoch)
-        })
+      const handler = (data: DerivMessage) => {
+        if ("msg_type" in data && data.msg_type === "tick" && "tick" in data) {
+          const tick = (data as TickStream).tick
+          // ✅ STRICT NUMBER CASTING AT LOWEST LEVEL
+          callback({
+            ...tick,
+            quote: Number(tick.quote),
+            epoch: Number(tick.epoch)
+          })
+        }
       }
-    }
 
-    this.on("tick", handler)
+      this.on("tick", handler)
 
-    // Track this subscription for resubscription after reconnection
-    this.activeSubscriptions.set(subscriptionKey, {
-      type: 'ticks',
-      params: { symbol },
-      callback,
-    })
+      // Track this subscription for resubscription after reconnection
+      this.activeSubscriptions.set(subscriptionKey, {
+        type: 'ticks',
+        params: { symbol },
+        callback,
+      })
 
-    // ✅ PHASE 4: SEND SUBSCRIPTION REQUEST AND AWAIT CONFIRMATION
-    const response = await this.request({
-      ticks: symbol,
-      subscribe: 1,
-      req_id: reqId,
-    })
+      // ✅ PHASE 4: SEND SUBSCRIPTION REQUEST AND AWAIT CONFIRMATION
+      const response = await this.request({
+        ticks: symbol,
+        subscribe: 1,
+        req_id: reqId,
+      })
 
-    // ✅ PHASE 5: CAPTURE SUBSCRIPTION ID AND ACTIVATE SHIELD
-    if ('subscription' in response && response.subscription) {
-      this.expectedSubscriptionId = response.subscription.id
-      this.subscriptions.set(response.subscription.id, response.subscription.id)
-      console.log(`[DerivAPI] ✅ Tick subscription active: ${response.subscription.id}`)
-    }
-    
-    // Handshake complete - enable filtering
-    this.isSubscriptionHandshakeActive = false
+      // ✅ PHASE 5: CAPTURE SUBSCRIPTION ID AND ACTIVATE SHIELD
+      if ('subscription' in response && response.subscription) {
+        this.expectedSubscriptionId = response.subscription.id
+        this.subscriptions.set(response.subscription.id, response.subscription.id)
+        console.log(`[DerivAPI] ✅ Tick subscription active: ${response.subscription.id}`)
+      }
+      
+      // Handshake complete - enable filtering
+      this.isSubscriptionHandshakeActive = false
 
-    // Return unsubscribe function
-    return () => {
-      this.off("tick", handler)
-      this.activeSubscriptions.delete(subscriptionKey)
-      this.forgetAll("ticks")
+      // Return unsubscribe function
+      return () => {
+        this.off("tick", handler)
+        this.activeSubscriptions.delete(subscriptionKey)
+        this.forgetAll("ticks")
+      }
+    } finally {
+      // ✅ MUTEX: Release lock
+      this.isSubscribing = false
     }
   }
 
@@ -578,74 +644,95 @@ class DerivAPI {
   }
 
   async subscribeOHLC(symbol: string, granularity: number, callback: (ohlc: OHLCStream["ohlc"]) => void): Promise<() => void> {
-    const reqId = this.getNextReqId()
-    const subscriptionKey = `ohlc_${symbol}_${granularity}`
+    // ✅ MUTEX: Prevent concurrent subscription requests
+    if (this.isSubscribing) {
+      console.warn("[DerivAPI] Subscription already in progress, waiting...")
+      // Wait for current subscription to complete
+      await new Promise(resolve => {
+        const checkInterval = setInterval(() => {
+          if (!this.isSubscribing) {
+            clearInterval(checkInterval)
+            resolve(void 0)
+          }
+        }, 50)
+      })
+    }
+    
+    this.isSubscribing = true
+    
+    try {
+      const reqId = this.getNextReqId()
+      const subscriptionKey = `ohlc_${symbol}_${granularity}`
 
-    // ✅ PHASE 1: HANDSHAKE INIT - Disable filtering
-    this.isSubscriptionHandshakeActive = true
-    this.expectedSubscriptionId = null
-    this.currentStreamType = null
-    
-    // ✅ PHASE 2: FULLY TERMINATE PREVIOUS STREAM - AWAIT CONFIRMATION
-    await this.forgetAll('ticks')
-    
-    // Clear previous handlers completely
-    this.handlers.delete("ohlc")
-    
-    // ✅ PHASE 3: ACTIVATE NEW STREAM TYPE
-    this.currentStreamType = 'ohlc'
+      // ✅ PHASE 1: HANDSHAKE INIT - Disable filtering
+      this.isSubscriptionHandshakeActive = true
+      this.expectedSubscriptionId = null
+      this.currentStreamType = null
+      
+      // ✅ PHASE 2: FULLY TERMINATE PREVIOUS STREAM - AWAIT CONFIRMATION
+      await this.forgetAll('ticks')
+      
+      // Clear previous handlers completely
+      this.handlers.delete("ohlc")
+      
+      // ✅ PHASE 3: ACTIVATE NEW STREAM TYPE
+      this.currentStreamType = 'ohlc'
 
-    const handler = (data: DerivMessage) => {
-      if ("msg_type" in data && data.msg_type === "ohlc" && "ohlc" in data) {
-        const ohlc = (data as OHLCStream).ohlc
-        // ✅ STRICT NUMBER CASTING AT LOWEST LEVEL
-        callback({
-          ...ohlc,
-          open: Number(ohlc.open),
-          high: Number(ohlc.high),
-          low: Number(ohlc.low),
-          close: Number(ohlc.close),
-          epoch: Number(ohlc.epoch),
-          granularity: Number(ohlc.granularity)
-        })
+      const handler = (data: DerivMessage) => {
+        if ("msg_type" in data && data.msg_type === "ohlc" && "ohlc" in data) {
+          const ohlc = (data as OHLCStream).ohlc
+          // ✅ STRICT NUMBER CASTING AT LOWEST LEVEL
+          callback({
+            ...ohlc,
+            open: Number(ohlc.open),
+            high: Number(ohlc.high),
+            low: Number(ohlc.low),
+            close: Number(ohlc.close),
+            epoch: Number(ohlc.epoch),
+            granularity: Number(ohlc.granularity)
+          })
+        }
       }
-    }
 
-    this.on("ohlc", handler)
+      this.on("ohlc", handler)
 
-    // Track this subscription for resubscription after reconnection
-    this.activeSubscriptions.set(subscriptionKey, {
-      type: 'ohlc',
-      params: { symbol, granularity },
-      callback,
-    })
+      // Track this subscription for resubscription after reconnection
+      this.activeSubscriptions.set(subscriptionKey, {
+        type: 'ohlc',
+        params: { symbol, granularity },
+        callback,
+      })
 
-    // ✅ PHASE 4: SEND SUBSCRIPTION REQUEST AND AWAIT CONFIRMATION
-    const response = await this.request({
-      ticks_history: symbol,
-      style: "candles",
-      granularity,
-      subscribe: 1,
-      end: "latest",
-      count: 500,
-      req_id: reqId,
-    })
+      // ✅ PHASE 4: SEND SUBSCRIPTION REQUEST AND AWAIT CONFIRMATION
+      const response = await this.request({
+        ticks_history: symbol,
+        style: "candles",
+        granularity,
+        subscribe: 1,
+        end: "latest",
+        count: 500,
+        req_id: reqId,
+      })
 
-    // ✅ PHASE 5: CAPTURE SUBSCRIPTION ID AND ACTIVATE SHIELD
-    if ('subscription' in response && response.subscription) {
-      this.expectedSubscriptionId = response.subscription.id
-      this.subscriptions.set(response.subscription.id, response.subscription.id)
-      console.log(`[DerivAPI] ✅ OHLC subscription active: ${response.subscription.id}`)
-    }
-    
-    // Handshake complete - enable filtering
-    this.isSubscriptionHandshakeActive = false
+      // ✅ PHASE 5: CAPTURE SUBSCRIPTION ID AND ACTIVATE SHIELD
+      if ('subscription' in response && response.subscription) {
+        this.expectedSubscriptionId = response.subscription.id
+        this.subscriptions.set(response.subscription.id, response.subscription.id)
+        console.log(`[DerivAPI] ✅ OHLC subscription active: ${response.subscription.id}`)
+      }
+      
+      // Handshake complete - enable filtering
+      this.isSubscriptionHandshakeActive = false
 
-    // Return unsubscribe function
-    return () => {
-      this.off("ohlc", handler)
-      this.activeSubscriptions.delete(subscriptionKey)
-      this.forgetAll("candles")
+      // Return unsubscribe function
+      return () => {
+        this.off("ohlc", handler)
+        this.activeSubscriptions.delete(subscriptionKey)
+        this.forgetAll("candles")
+      }
+    } finally {
+      // ✅ MUTEX: Release lock
+      this.isSubscribing = false
     }
   }
 
@@ -970,7 +1057,6 @@ class DerivAPI {
     this.isConnecting = false
     this.isConnectedState = false
     this.isAuthorized = false
-    this.hasReceivedOnOpen = false // Reset onopen flag on disconnect
     this.handlers.clear()
     this.pendingRequests.clear()
     this.subscriptions.clear()

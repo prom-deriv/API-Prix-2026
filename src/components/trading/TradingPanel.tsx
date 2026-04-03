@@ -88,7 +88,7 @@ const TradingPanel: React.FC = () => {
         const api = getDerivAPI()
         
         // Wait for API to be ready before making requests
-        const waitForReady = async (maxWait = 10000): Promise<boolean> => {
+        const waitForReady = async (maxWait = 20000): Promise<boolean> => {
           const start = Date.now()
           while (Date.now() - start < maxWait) {
             if (api.isReady()) return true
