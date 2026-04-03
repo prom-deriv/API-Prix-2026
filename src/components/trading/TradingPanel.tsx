@@ -86,6 +86,25 @@ const TradingPanel: React.FC = () => {
       
       try {
         const api = getDerivAPI()
+        
+        // Wait for API to be ready before making requests
+        const waitForReady = async (maxWait = 10000): Promise<boolean> => {
+          const start = Date.now()
+          while (Date.now() - start < maxWait) {
+            if (api.isReady()) return true
+            await new Promise(resolve => setTimeout(resolve, 100))
+          }
+          return false
+        }
+        
+        const isReady = await waitForReady()
+        if (!isReady) {
+          console.warn("[TradingPanel] API not ready after waiting, using default offsets")
+          setBarrierOffsetRange(0.1, 10)
+          setBarrierOffset(0.5)
+          return
+        }
+        
         const contracts = await api.getContractsFor(currentSymbol)
         
         // Determine which contract types are available
