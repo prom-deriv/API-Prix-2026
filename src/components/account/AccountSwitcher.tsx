@@ -33,12 +33,32 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
 
   const handleOAuthCallback = useCallback(async (code: string, codeVerifier: string) => {
     try {
-      const api = getDerivAPI()
       const clientId = import.meta.env.VITE_DERIV_OAUTH_CLIENT_ID
       const redirectUri = "https://promotrade.netlify.app"
 
-      // Exchange code for token (this should ideally be done server-side)
-      const tokenResponse = await api.exchangeCodeForToken(code, codeVerifier, clientId, redirectUri)
+      console.log("[AccountSwitcher] Exchanging code for token via Netlify Function...")
+
+      // Exchange code for token using Netlify Function (bypasses CORS)
+      const response = await fetch('/.netlify/functions/exchange-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          codeVerifier,
+          clientId,
+          redirectUri,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error_description || errorData.error || `HTTP ${response.status}`)
+      }
+
+      const tokenResponse = await response.json()
+      console.log("[AccountSwitcher] Token exchange successful")
       
       // Connect with the access token
       await connectReal(tokenResponse.access_token)
