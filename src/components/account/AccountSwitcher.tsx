@@ -34,8 +34,8 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
   const handleOAuthCallback = useCallback(async (code: string, codeVerifier: string) => {
     try {
       const api = getDerivAPI()
-      const clientId = import.meta.env.VITE_DERIV_CLIENT_ID || "1089"
-      const redirectUri = window.location.origin
+      const clientId = import.meta.env.VITE_DERIV_OAUTH_CLIENT_ID
+      const redirectUri = "https://promotrade.netlify.app"
 
       // Exchange code for token (this should ideally be done server-side)
       const tokenResponse = await api.exchangeCodeForToken(code, codeVerifier, clientId, redirectUri)
@@ -50,8 +50,8 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
   const handleConnectReal = useCallback(async () => {
     // Start OAuth flow
     const api = getDerivAPI()
-    const clientId = import.meta.env.VITE_DERIV_CLIENT_ID || "1089"
-    const redirectUri = window.location.origin
+    const clientId = import.meta.env.VITE_DERIV_OAUTH_CLIENT_ID
+    const redirectUri = "https://promotrade.netlify.app"
 
     const { url, codeVerifier, state } = api.generateOAuthUrl(clientId, redirectUri, "trade")
     
