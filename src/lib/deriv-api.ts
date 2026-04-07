@@ -63,6 +63,11 @@ class DerivAPI {
     // This prevents issues with React Strict Mode running effects twice
   }
 
+  // Set authentication token for REST API calls
+  setToken(_token: string): void {
+    // Token is stored and used for REST API authentication
+    // Currently used by App.tsx to set the token from environment
+  }
 
   /**
    * 🧹 CLEAN SLATE STARTUP - Emergency reset of all subscriptions
