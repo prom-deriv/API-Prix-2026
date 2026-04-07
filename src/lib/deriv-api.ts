@@ -583,11 +583,17 @@ class DerivAPI {
         resolve: (data: any) => {
           console.log("[DerivAPI] Active symbols response:", data)
           // Handle both old and new API response formats
-          if (data.active_symbols) {
+          if (data.active_symbols && Array.isArray(data.active_symbols)) {
             resolve(data.active_symbols)
           } else if (data.data) {
-            // New API format: { data: { active_symbols: [...] } }
-            resolve(data.data.active_symbols || data.data || [])
+            // New API format: { data: { active_symbols: [...] } } or { data: [...] }
+            if (data.data.active_symbols && Array.isArray(data.data.active_symbols)) {
+              resolve(data.data.active_symbols)
+            } else if (Array.isArray(data.data)) {
+              resolve(data.data)
+            } else {
+              reject(new Error("Failed to get active symbols: invalid data format"))
+            }
           } else {
             reject(new Error("Failed to get active symbols"))
           }
@@ -886,6 +892,7 @@ class DerivAPI {
         reject,
       })
 
+      // New Deriv API uses 'underlying' instead of 'symbol'
       this.send({
         proposal: 1,
         amount: params.amount,
@@ -894,7 +901,7 @@ class DerivAPI {
         currency: params.currency || "USD",
         duration: params.duration,
         duration_unit: params.duration_unit,
-        symbol: params.symbol,
+        underlying: params.symbol,
         req_id: reqId,
         ...(params.barrier && { barrier: params.barrier }),
       })
