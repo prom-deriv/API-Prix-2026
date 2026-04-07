@@ -170,32 +170,18 @@ export function AccountProvider({ children }: AccountProviderProps) {
       await api.connectWithOTP(otpResponse.data.url)
       console.log("[AccountContext] Connected with OTP!")
       
-      // Step 4: Wait for balance event (instead of using getBalance which times out)
-      console.log("[AccountContext] Waiting for balance update...")
-      const balanceData = await new Promise<{ balance: number; currency: string }>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          unsubscribe()
-          reject(new Error("Balance timeout after 10 seconds"))
-        }, 10000)
-        
-        const unsubscribe = api.on("balance", (data: any) => {
-          if (data?.balance?.balance !== undefined) {
-            clearTimeout(timeout)
-            unsubscribe()
-            resolve({
-              balance: data.balance.balance,
-              currency: data.balance.currency || "USD",
-            })
-          }
-        })
-      })
-      console.log("[AccountContext] Balance received:", balanceData)
+      // Step 4: Extract balance from accounts response (REST API)
+      // The accounts response should contain balance information
+      console.log("[AccountContext] Extracting balance from accounts response...")
+      const accountBalance = account.balance || 0
+      const accountCurrency = account.currency || "USD"
+      console.log("[AccountContext] Balance from accounts:", accountBalance, accountCurrency)
       
       // Update state with connected account info
       setAccountInfo((prev) => ({
         ...prev,
-        balance: balanceData.balance || 0,
-        currency: balanceData.currency || "",
+        balance: accountBalance,
+        currency: accountCurrency,
         loginId: accountId,
         isConnected: true,
         isConnecting: false,
