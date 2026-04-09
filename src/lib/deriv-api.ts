@@ -1607,14 +1607,14 @@ class DerivAPI {
    * @param clientId - OAuth2 client ID
    * @param redirectUri - Registered redirect URI
    * @param scope - OAuth scope ("trade" or "admin")
-   * @param prompt - Optional prompt ("registration" for signup)
+   * @param prompt - Optional prompt ("registration" for signup, "login" to force login page)
    * @param utmParams - Optional UTM tracking parameters for partner signup
    */
   async generateOAuthUrl(
     clientId: string,
     redirectUri: string,
     scope: "trade" | "admin" = "trade",
-    prompt?: "registration",
+    prompt?: "registration" | "login",
     utmParams?: {
       sidc?: string
       utm_campaign?: string

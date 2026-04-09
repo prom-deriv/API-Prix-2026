@@ -94,7 +94,8 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
       }
 
       // generateOAuthUrl is now async and includes code_challenge in the URL
-      const { url, codeVerifier, state } = await api.generateOAuthUrl(clientId, redirectUri, "trade")
+      // Use prompt="login" to force the login page to appear even if user has active session
+      const { url, codeVerifier, state } = await api.generateOAuthUrl(clientId, redirectUri, "trade", "login")
 
       console.log("[AccountSwitcher] OAuth URL generated, redirecting...")
 
