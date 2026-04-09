@@ -23,6 +23,7 @@ import type {
   DerivAccountsResponse,
   ResetDemoBalanceResponse,
   OTPResponse,
+  CashierResponse,
 } from "../types/deriv"
 
 // Deriv API WebSocket endpoint
@@ -1693,6 +1694,86 @@ class DerivAPI {
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
       .replace(/=+$/, "")
+  }
+
+  /**
+   * Get deposit cashier URL via WebSocket
+   * Opens Deriv's hosted deposit page in a new tab
+   * @param currency - Currency code (default: "USD")
+   */
+  async deposit(currency: string = "USD"): Promise<string> {
+    const reqId = this.getNextReqId()
+
+    const isReady = await this.waitUntilReady(10000)
+    if (!isReady) {
+      throw new Error("API not ready - connection timeout")
+    }
+
+    return new Promise((resolve, reject) => {
+      this.pendingRequests.set(reqId, {
+        resolve: (data: CashierResponse) => {
+          if (data.cashier) {
+            resolve(data.cashier)
+          } else {
+            reject(new Error("Failed to get deposit URL"))
+          }
+        },
+        reject,
+      })
+
+      this.send({
+        cashier: "deposit",
+        currency,
+        req_id: reqId,
+      })
+
+      setTimeout(() => {
+        if (this.pendingRequests.has(reqId)) {
+          this.pendingRequests.delete(reqId)
+          reject(new Error("Request timeout"))
+        }
+      }, 15000)
+    })
+  }
+
+  /**
+   * Get withdrawal cashier URL via WebSocket
+   * Opens Deriv's hosted withdrawal page in a new tab
+   * @param currency - Currency code (default: "USD")
+   */
+  async withdraw(currency: string = "USD"): Promise<string> {
+    const reqId = this.getNextReqId()
+
+    const isReady = await this.waitUntilReady(10000)
+    if (!isReady) {
+      throw new Error("API not ready - connection timeout")
+    }
+
+    return new Promise((resolve, reject) => {
+      this.pendingRequests.set(reqId, {
+        resolve: (data: CashierResponse) => {
+          if (data.cashier) {
+            resolve(data.cashier)
+          } else {
+            reject(new Error("Failed to get withdrawal URL"))
+          }
+        },
+        reject,
+      })
+
+      this.send({
+        cashier: "withdraw",
+        currency,
+        req_id: reqId,
+      })
+
+      setTimeout(() => {
+        if (this.pendingRequests.has(reqId)) {
+          this.pendingRequests.delete(reqId)
+          reject(new Error("Request timeout"))
+        }
+      }, 15000)
+    })
   }
 
   /**

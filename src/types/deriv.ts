@@ -623,3 +623,8 @@ export interface OTPResponse {
     timing: number
   }
 }
+
+export interface CashierResponse {
+  cashier: string
+  msg_type: "cashier"
+}

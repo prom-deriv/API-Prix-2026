@@ -7,6 +7,7 @@ import TradingPanel from "./components/trading/TradingPanel"
 import TradeHistory from "./components/trading/TradeHistory"
 import AccountSnapshot from "./components/account/AccountSnapshot"
 import AccountSwitcher from "./components/account/AccountSwitcher"
+import DepositWithdraw from "./components/account/DepositWithdraw"
 import AssetSelector from "./components/trading/AssetSelector"
 import ChartStyleSelector from "./components/charts/ChartStyleSelector"
 import ErrorBoundary from "./components/ui/ErrorBoundary"
@@ -514,6 +515,7 @@ function App() {
 
           <div className="lg:col-span-1 space-y-4">
             <AccountSwitcher />
+            <DepositWithdraw />
             <TradingPanel />
             <AccountSnapshot />
           </div>
