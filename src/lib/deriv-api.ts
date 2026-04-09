@@ -1610,7 +1610,7 @@ class DerivAPI {
    * @param prompt - Optional prompt ("registration" for signup)
    * @param utmParams - Optional UTM tracking parameters for partner signup
    */
-  generateOAuthUrl(
+  async generateOAuthUrl(
     clientId: string,
     redirectUri: string,
     scope: "trade" | "admin" = "trade",
@@ -1621,7 +1621,7 @@ class DerivAPI {
       utm_medium?: string
       utm_source?: string
     }
-  ): { url: string; codeVerifier: string; state: string } {
+  ): Promise<{ url: string; codeVerifier: string; state: string }> {
     // Generate PKCE code verifier (random 64-char string)
     const array = crypto.getRandomValues(new Uint8Array(64))
     const codeVerifier = Array.from(array)
@@ -1632,7 +1632,10 @@ class DerivAPI {
     const state = crypto.getRandomValues(new Uint8Array(16))
       .reduce((s, b) => s + b.toString(16).padStart(2, "0"), "")
 
-    // Build URL parameters
+    // Compute code_challenge from code_verifier
+    const codeChallenge = await this.deriveCodeChallenge(codeVerifier)
+
+    // Build URL parameters with code_challenge included
     const params = new URLSearchParams({
       response_type: "code",
       client_id: clientId,
@@ -1640,6 +1643,7 @@ class DerivAPI {
       scope,
       state,
       code_challenge_method: "S256",
+      code_challenge: codeChallenge,
     })
 
     // Add prompt for registration
@@ -1655,8 +1659,6 @@ class DerivAPI {
       if (utmParams.utm_source) params.set("utm_source", utmParams.utm_source)
     }
 
-    // Note: code_challenge is async, so we return it separately
-    // The caller should compute it and add to params before redirecting
     return { url: `${this.getOAuthUrl()}?${params.toString()}`, codeVerifier, state }
   }
 

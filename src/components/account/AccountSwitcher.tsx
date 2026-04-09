@@ -93,11 +93,8 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
         throw new Error("OAuth client ID not configured. Please check VITE_DERIV_OAUTH_CLIENT_ID environment variable.")
       }
 
-      const { url, codeVerifier, state } = api.generateOAuthUrl(clientId, redirectUri, "trade")
-      
-      // Compute code_challenge and add to URL
-      const codeChallenge = await api.deriveCodeChallenge(codeVerifier)
-      const finalUrl = `${url}&code_challenge=${codeChallenge}`
+      // generateOAuthUrl is now async and includes code_challenge in the URL
+      const { url, codeVerifier, state } = await api.generateOAuthUrl(clientId, redirectUri, "trade")
 
       console.log("[AccountSwitcher] OAuth URL generated, redirecting...")
 
@@ -105,8 +102,8 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
       sessionStorage.setItem("oauth_state", state)
       sessionStorage.setItem("oauth_code_verifier", codeVerifier)
 
-      // Redirect to Deriv OAuth
-      window.location.href = finalUrl
+      // Redirect to Deriv OAuth (code_challenge is already in the URL)
+      window.location.href = url
     } catch (error) {
       console.error("[AccountSwitcher] Failed to start OAuth flow:", error)
       setError(error instanceof Error ? error.message : "Failed to start authentication")

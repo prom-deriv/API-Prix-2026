@@ -26,7 +26,6 @@ function App() {
     isConnecting,
     error,
     chartStyle,
-    setSymbols,
     setCurrentTick,
     setTickHistory,
     setCurrentOHLC,
