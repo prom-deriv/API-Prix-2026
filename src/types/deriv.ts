@@ -227,6 +227,10 @@ export interface ProfitTable {
     sell_time: number
     shortcode: string
     transaction_id: number
+    entry_tick?: number
+    exit_tick?: number
+    entry_tick_display_value?: string
+    exit_tick_display_value?: string
   }>
 }
 

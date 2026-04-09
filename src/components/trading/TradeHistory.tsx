@@ -1,9 +1,9 @@
 import React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import { useTradingStore } from "../../stores/tradingStore"
-import { formatCurrency, formatTimestamp } from "../../lib/utils"
+import { formatCurrency, formatTimestamp, formatNumber } from "../../lib/utils"
 import { cn } from "../../lib/utils"
-import { History, TrendingUp, TrendingDown } from "lucide-react"
+import { History, TrendingUp, TrendingDown, ArrowRight } from "lucide-react"
 
 const TradeHistory: React.FC = () => {
   const { recentTrades } = useTradingStore()
@@ -74,6 +74,13 @@ const TradeHistory: React.FC = () => {
                   <div className="text-xs text-muted-foreground">
                     Stake: {formatCurrency(trade.buy_price)}
                   </div>
+                  {trade.entry_tick !== undefined && trade.exit_tick !== undefined && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                      <span>{trade.entry_tick_display_value || formatNumber(trade.entry_tick, 5)}</span>
+                      <ArrowRight className="h-3 w-3" />
+                      <span>{trade.exit_tick_display_value || formatNumber(trade.exit_tick, 5)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )
