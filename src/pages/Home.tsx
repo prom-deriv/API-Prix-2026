@@ -17,7 +17,7 @@ import { AIAssistant } from "../components/ai/AIAssistant"
 import { Card, CardContent } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { formatNumber, formatPercentage } from "../lib/utils"
-import { Wifi, WifiOff, RefreshCw, TrendingUp, TrendingDown, Gamepad2, Home as HomeIcon } from "lucide-react"
+import { Wifi, WifiOff, RefreshCw, TrendingUp, TrendingDown, Gamepad2, Home as HomeIcon, Waves } from "lucide-react"
 import { Link } from "react-router-dom"
 import { ThemeToggle } from "../components/ui/ThemeToggle"
 
@@ -443,6 +443,16 @@ function Home() {
                 }}>
                   <Gamepad2 className="h-4 w-4" />
                   Mochi Moto
+                </Button>
+              </Link>
+              <Link to="/surf-the-waves">
+                <Button variant="outline" size="sm" className="gap-2" style={{
+                  backgroundColor: "#E0F2FE",
+                  border: "2px solid #0EA5E9",
+                  color: "#0C4A6E"
+                }}>
+                  <Waves className="h-4 w-4" />
+                  Surf Waves
                 </Button>
               </Link>
               <AssetSelector className="w-64" />
