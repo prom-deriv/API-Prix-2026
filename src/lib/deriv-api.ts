@@ -591,9 +591,20 @@ class DerivAPI {
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(reqId, {
         resolve: (data: any) => {
-          console.log("[DerivAPI] Active symbols response:", data)
           // Handle both old and new API response formats
           if (data.active_symbols && Array.isArray(data.active_symbols)) {
+            // 🔍 LIGHTWEIGHT DIAGNOSTIC: Log summary only (avoid heavy processing)
+            console.log(`[DerivAPI] ✅ Loaded ${data.active_symbols.length} symbols`)
+            
+            // Sample first 3 symbols for verification
+            const sampleSymbols = data.active_symbols.slice(0, 3).map((s: any) => ({
+              symbol: s.symbol,
+              display: s.display_name,
+              market: s.market_display_name,
+              open: s.exchange_is_open === 1
+            }))
+            console.log("[DerivAPI] 📊 Sample symbols:", sampleSymbols)
+            
             resolve(data.active_symbols)
           } else if (data.data) {
             // New API format: { data: { active_symbols: [...] } } or { data: [...] }
@@ -1184,12 +1195,13 @@ class DerivAPI {
         req_id: reqId,
       })
 
+      // Increased timeout from 10s to 30s for better UX
       setTimeout(() => {
         if (this.pendingRequests.has(reqId)) {
           this.pendingRequests.delete(reqId)
-          reject(new Error("Request timeout"))
+          reject(new Error("Request timeout - Contract sell operation may require authentication. Please check your API connection."))
         }
-      }, 10000)
+      }, 30000)
     })
   }
 
@@ -1256,12 +1268,13 @@ class DerivAPI {
         req_id: reqId,
       })
 
+      // Increased timeout from 10s to 30s for better UX
       setTimeout(() => {
         if (this.pendingRequests.has(reqId)) {
           this.pendingRequests.delete(reqId)
-          reject(new Error("Request timeout"))
+          reject(new Error("Request timeout - Contract update operation may require authentication. Please check your API connection."))
         }
-      }, 10000)
+      }, 30000)
     })
   }
 
