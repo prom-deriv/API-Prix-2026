@@ -141,8 +141,11 @@ const AssetSelector: React.FC<AssetSelectorProps> = ({ className }) => {
     setExpandedMarkets((prev) => {
       const next = new Set(prev)
       if (next.has(market)) {
+        // Collapse this market
         next.delete(market)
       } else {
+        // Expand this market and collapse all others (accordion behavior)
+        next.clear()
         next.add(market)
       }
       return next

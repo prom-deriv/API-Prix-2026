@@ -109,6 +109,18 @@ const TradingPanel: React.FC = () => {
         
         const contracts = await api.getContractsFor(currentSymbol)
         
+        // 🔍 DIAGNOSTIC: Log contracts_for response for debugging
+        console.log(`[TradingPanel] 📋 contracts_for response for ${currentSymbol}:`, contracts)
+        console.log(`[TradingPanel] Available contract types:`, 
+          contracts.available.map(c => ({
+            type: c.contract_type,
+            barrier_category: c.barrier_category,
+            barrier: c.barrier,
+            min_offset: c.min_barrier_offset,
+            max_offset: c.max_barrier_offset
+          }))
+        )
+        
         // Determine which contract types are available
         const availableTypes = new Set<ContractCategory>()
         
@@ -117,19 +129,23 @@ const TradingPanel: React.FC = () => {
           (c) => c.contract_type === "CALL" || c.contract_type === "PUT"
         )
         if (hasRiseFall) availableTypes.add("RISE_FALL")
+        console.log(`[TradingPanel] ${currentSymbol} - Rise/Fall available:`, hasRiseFall)
         
         // Check for Higher/Lower availability (euro_non_atm barrier category)
         const hasHigherLower = contracts.available.some(
           (c) => c.barrier_category === "euro_non_atm"
         )
         if (hasHigherLower) availableTypes.add("HIGHER_LOWER")
+        console.log(`[TradingPanel] ${currentSymbol} - Higher/Lower available:`, hasHigherLower)
         
         // Check for Touch/No Touch availability
         const hasTouchNoTouch = contracts.available.some(
           (c) => c.contract_type === "ONETOUCH" || c.contract_type === "NOTOUCH"
         )
         if (hasTouchNoTouch) availableTypes.add("TOUCH_NO_TOUCH")
+        console.log(`[TradingPanel] ${currentSymbol} - Touch/No Touch available:`, hasTouchNoTouch)
         
+        console.log(`[TradingPanel] ${currentSymbol} - Final available types:`, Array.from(availableTypes))
         setAvailableContractTypes(availableTypes)
         
         // If current contract type is not available, switch to first available
@@ -216,9 +232,9 @@ const TradingPanel: React.FC = () => {
     setProposal(null)
   }, [minBarrierOffset, maxBarrierOffset, precision, setBarrierOffset])
 
-  const { addRecentTrade, addActiveContract, removeActiveContract } = useTradingStore()
+  const { addRecentTrade, addActiveContract, removeActiveContract, addDerivPoints } = useTradingStore()
 
-  // Demo mode: simulate trade with 50/50 win chance
+  // Demo mode: simulate trade with real-time updates and SL/TP support
   const simulateDemoTrade = useCallback((contractType: ContractType): Promise<void> => {
     return new Promise((resolve) => {
       const tradeAmount = parseFloat(amount)
@@ -228,51 +244,187 @@ const TradingPanel: React.FC = () => {
       const entryTick = useTradingStore.getState().currentTick
       const entryQuote = entryTick?.quote ?? 0
       
-      // Simulate trading duration - use 1 second per tick for demo
-      const tradeDuration = durationUnit === 't' 
-        ? parseInt(duration) * 1000 // 1 second per tick
-        : parseInt(duration) * 1000
-      const maxDuration = Math.min(tradeDuration, 30000) // Cap at 30 seconds for demo
+      // Convert duration to milliseconds based on unit
+      let tradeDurationMs: number
+      switch (durationUnit) {
+        case 't': // ticks - simulate 1 second per tick for demo
+          tradeDurationMs = parseInt(duration) * 1000
+          break
+        case 's': // seconds
+          tradeDurationMs = parseInt(duration) * 1000
+          break
+        case 'm': // minutes
+          tradeDurationMs = parseInt(duration) * 60 * 1000
+          break
+        case 'h': // hours
+          tradeDurationMs = parseInt(duration) * 60 * 60 * 1000
+          break
+        case 'd': // days
+          tradeDurationMs = parseInt(duration) * 24 * 60 * 60 * 1000
+          break
+        default:
+          tradeDurationMs = parseInt(duration) * 1000
+      }
       
-      setTimeout(() => {
-        // 50/50 win chance for demo
-        const won = Math.random() > 0.5
+      // Create unique contract ID for demo
+      const demoContractId = Date.now()
+      const startTime = Date.now()
+      const expiryTime = startTime + tradeDurationMs
+      
+      // Add to active contracts immediately
+      addActiveContract({
+        contract_id: demoContractId,
+        contract_type: contractType,
+        currency: "USD",
+        date_expiry: expiryTime / 1000,
+        date_settlement: 0,
+        date_start: startTime / 1000,
+        display_name: currentSymbol,
+        buy_price: tradeAmount,
+        payout: payout,
+        profit: 0,
+        current_spot: entryQuote,
+        entry_spot: entryQuote,
+        entry_spot_display_value: entryQuote.toFixed(precision),
+        is_sold: 0,
+        status: "open",
+        underlying: currentSymbol,
+        longcode: `${contractType} ${currentSymbol} - Demo trade`,
+        shortcode: `${contractType}_demo_${demoContractId}`,
+        bid_price: tradeAmount,
+        sell_price: 0,
+        sell_spot: 0,
+        sell_spot_display_value: "",
+        sell_spot_time: 0,
+        current_spot_display_value: entryQuote.toFixed(precision),
+        current_spot_time: startTime / 1000,
+        audit: { all_ticks: [] },
+        barrier: 0,
+        expiry_time: expiryTime / 1000,
+        id: demoContractId.toString(),
+        is_expired: 0,
+        is_forward_starting: 0,
+        is_intraday: 1,
+        is_path_dependent: 0,
+        is_settleable: 0,
+        profit_percentage: 0,
+        purchase_time: startTime / 1000,
+        transaction_ids: { buy: demoContractId },
+      })
+      
+      // Real-time update interval (every 500ms)
+      const updateInterval = setInterval(() => {
+        const currentTick = useTradingStore.getState().currentTick
+        if (!currentTick) return
         
-        const profit = won ? payout - tradeAmount : -tradeAmount
-        const newBalance = won ? accountBalance + profit : accountBalance - tradeAmount
-        updateBalance(newBalance)
+        const currentQuote = currentTick.quote
+        const elapsed = Date.now() - startTime
+        const timeRemaining = Math.max(0, tradeDurationMs - elapsed)
         
-        // Capture exit tick at the end of the trade
-        const exitTick = useTradingStore.getState().currentTick
-        const exitQuote = exitTick?.quote ?? entryQuote
+        // Calculate current profit based on price movement
+        // Simplified: profit scales with price movement and time elapsed
+        const priceChange = currentQuote - entryQuote
+        const isWinning = (contractType === "CALL" && priceChange > 0) || 
+                          (contractType === "PUT" && priceChange < 0) ||
+                          (contractType === "ONETOUCH" && Math.abs(priceChange) > (barrierOffset ?? 0)) ||
+                          (contractType === "NOTOUCH" && Math.abs(priceChange) <= (barrierOffset ?? 0))
         
-        // Add to trade history with entry/exit ticks
-        addRecentTrade({
-          app_id: 1089,
-          buy_price: tradeAmount,
-          contract_id: Date.now(), // Use timestamp as unique ID for demo
-          contract_type: contractType,
-          currency: "USD",
-          date_expiry: 0,
-          date_start: Date.now() / 1000,
-          longcode: `${contractType} ${currentSymbol} - Demo trade`,
-          payout: payout,
-          profit: profit,
-          sell_price: won ? payout : 0,
-          sell_time: Date.now() / 1000,
-          shortcode: `${contractType}_demo`,
-          transaction_id: Date.now(),
-          entry_tick: entryQuote,
-          exit_tick: exitQuote,
-          entry_tick_display_value: entryQuote.toFixed(resolvedPipSize ? Math.max(0, Math.round(-Math.log10(resolvedPipSize))) : 2),
-          exit_tick_display_value: exitQuote.toFixed(resolvedPipSize ? Math.max(0, Math.round(-Math.log10(resolvedPipSize))) : 2),
+        // Current profit estimation (scales towards final payout/loss as time progresses)
+        const progressRatio = elapsed / tradeDurationMs
+        const currentProfit = isWinning 
+          ? (payout - tradeAmount) * progressRatio - tradeAmount * (1 - progressRatio)
+          : -tradeAmount * progressRatio
+        
+        const currentBidPrice = isWinning 
+          ? tradeAmount + (payout - tradeAmount) * progressRatio
+          : tradeAmount * (1 - progressRatio)
+        
+        // Update active contract with current values
+        useTradingStore.getState().updateActiveContract(demoContractId, {
+          current_spot: currentQuote,
+          current_spot_display_value: currentQuote.toFixed(precision),
+          current_spot_time: Date.now() / 1000,
+          profit: currentProfit,
+          bid_price: currentBidPrice,
+          status: timeRemaining > 0 ? "open" : "won",
         })
         
-        setProposal(null)
-        resolve()
-      }, maxDuration)
+        // Check SL/TP
+        const sltp = useTradingStore.getState().getContractSLTP(demoContractId)
+        let shouldClose = false
+        let closeReason = ""
+        
+        if (sltp?.stopLoss && currentBidPrice <= sltp.stopLoss) {
+          shouldClose = true
+          closeReason = "Stop Loss hit"
+        } else if (sltp?.takeProfit && currentBidPrice >= sltp.takeProfit) {
+          shouldClose = true
+          closeReason = "Take Profit hit"
+        } else if (timeRemaining <= 0) {
+          shouldClose = true
+          closeReason = "Contract expired"
+        }
+        
+        if (shouldClose) {
+          clearInterval(updateInterval)
+          
+          // Final settlement
+          const finalTick = useTradingStore.getState().currentTick
+          const exitQuote = finalTick?.quote ?? currentQuote
+          
+          // Determine final outcome
+          const finalProfit = closeReason.includes("Stop Loss") 
+            ? sltp!.stopLoss! - tradeAmount
+            : closeReason.includes("Take Profit")
+            ? sltp!.takeProfit! - tradeAmount
+            : currentProfit
+          
+          const finalBidPrice = closeReason.includes("Stop Loss")
+            ? sltp!.stopLoss!
+            : closeReason.includes("Take Profit")
+            ? sltp!.takeProfit!
+            : currentBidPrice
+          
+          const newBalance = accountBalance + finalProfit
+          updateBalance(newBalance)
+          
+          // Remove from active contracts
+          removeActiveContract(demoContractId)
+          
+          // Add Deriv Points
+          const pointsAwarded = Math.floor(tradeAmount)
+          if (pointsAwarded > 0) {
+            addDerivPoints(pointsAwarded)
+          }
+          
+          // Add to trade history
+          addRecentTrade({
+            app_id: 1089,
+            buy_price: tradeAmount,
+            contract_id: demoContractId,
+            contract_type: contractType,
+            currency: "USD",
+            date_expiry: expiryTime / 1000,
+            date_start: startTime / 1000,
+            longcode: `${contractType} ${currentSymbol} - Demo trade (${closeReason})`,
+            payout: payout,
+            profit: finalProfit,
+            sell_price: finalBidPrice,
+            sell_time: Date.now() / 1000,
+            shortcode: `${contractType}_demo_${demoContractId}`,
+            transaction_id: demoContractId,
+            entry_tick: entryQuote,
+            exit_tick: exitQuote,
+            entry_tick_display_value: entryQuote.toFixed(precision),
+            exit_tick_display_value: exitQuote.toFixed(precision),
+          })
+          
+          setProposal(null)
+          resolve()
+        }
+      }, 500) // Update every 500ms
     })
-  }, [amount, duration, durationUnit, proposal, accountBalance, updateBalance, addRecentTrade, currentSymbol, resolvedPipSize])
+  }, [amount, duration, durationUnit, proposal, accountBalance, updateBalance, addRecentTrade, currentSymbol, resolvedPipSize, addDerivPoints, addActiveContract, removeActiveContract, precision, barrierOffset])
 
   const executeTrade = useCallback(async (contractType: ContractType) => {
     setError(null)
@@ -368,6 +520,13 @@ const TradingPanel: React.FC = () => {
               // Remove from active contracts
               removeActiveContract(buyResult.contract_id)
               
+              // Add Deriv Points for real trade
+              const stakeAmount = contract.buy_price || parseFloat(amount)
+              const pointsAwarded = Math.floor(stakeAmount)
+              if (pointsAwarded > 0) {
+                addDerivPoints(pointsAwarded)
+              }
+              
               // Add to trade history with entry/exit tick data
               addRecentTrade({
                 app_id: 1089,
@@ -410,7 +569,7 @@ const TradingPanel: React.FC = () => {
     } finally {
       setIsTrading(false)
     }
-  }, [proposal, setIsTrading, accountType, simulateDemoTrade, accountBalance, updateBalance, addRecentTrade, amount, currentSymbol, barrierOffset, contractCategory, precision, isPositiveOffset, duration, durationUnit])
+  }, [proposal, setIsTrading, accountType, simulateDemoTrade, accountBalance, updateBalance, addRecentTrade, amount, currentSymbol, barrierOffset, contractCategory, precision, isPositiveOffset, duration, durationUnit, addDerivPoints, addActiveContract, removeActiveContract])
 
   // Whether to show barrier controls
   const showBarrierControls = contractCategory === "HIGHER_LOWER" || contractCategory === "TOUCH_NO_TOUCH"

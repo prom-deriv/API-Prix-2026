@@ -13,6 +13,7 @@ import DerivPoints from "../components/trading/DerivPoints"
 import AssetSelector from "../components/trading/AssetSelector"
 import ChartStyleSelector from "../components/charts/ChartStyleSelector"
 import ErrorBoundary from "../components/ui/ErrorBoundary"
+import { AIAssistant } from "../components/ai/AIAssistant"
 import { Card, CardContent } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { formatNumber, formatPercentage } from "../lib/utils"
@@ -531,6 +532,7 @@ function Home() {
             <DepositWithdraw />
             <TradingPanel />
             <AccountSnapshot />
+            <AIAssistant />
           </div>
         </div>
       </main>

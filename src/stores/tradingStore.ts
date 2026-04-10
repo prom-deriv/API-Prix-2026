@@ -9,29 +9,39 @@ import type {
   ChartStyle,
 } from "../types/deriv"
 
+interface ContractSLTP {
+  stopLoss?: number
+  takeProfit?: number
+}
+
 interface TradingState extends ConnectionState {
   // Symbols
   symbols: ActiveSymbol[]
   currentSymbol: string
   isSymbolLoading: boolean
-  
+
   // Ticks
   currentTick: Tick | null
   tickHistory: Tick[]
   totalTicksReceived: number
-  
+
   // OHLC Data
   currentOHLC: OHLC | null
   ohlcHistory: OHLC[]
-  
+
   // Chart Style
   chartStyle: ChartStyle
-  
+
   // Trading
   isTrading: boolean
   activeContracts: ProposalOpenContract[]
   recentTrades: ProfitTable["transactions"]
-  
+
+  // Stop Loss & Take Profit
+  stopLoss: number | null
+  takeProfit: number | null
+  contractsSLTP: Map<number, ContractSLTP>
+
   // Barrier for Higher/Lower and Touch/No Touch
   barrier: number | null
   barrierHigh: number | null
@@ -40,7 +50,10 @@ interface TradingState extends ConnectionState {
   minBarrierOffset: number | null
   maxBarrierOffset: number | null
   pipSize: number | null
-  
+
+  // Deriv Points
+  derivPoints: number
+
   // Actions
   setSymbols: (symbols: ActiveSymbol[]) => void
   setCurrentSymbol: (symbol: string) => void
@@ -64,8 +77,18 @@ interface TradingState extends ConnectionState {
   setBarrierOffset: (offset: number | null) => void
   setBarrierOffsetRange: (min: number | null, max: number | null) => void
   setPipSize: (pipSize: number | null) => void
+  setDerivPoints: (points: number) => void
+  addDerivPoints: (points: number) => void
+  convertDerivPoints: (pointsToConvert: number) => number
   fetchSymbols: () => Promise<void>
   clearState: () => void
+  
+  // Stop Loss & Take Profit Actions
+  setStopLoss: (value: number | null) => void
+  setTakeProfit: (value: number | null) => void
+  setContractSLTP: (contractId: number, sl?: number, tp?: number) => void
+  getContractSLTP: (contractId: number) => ContractSLTP | undefined
+  clearContractSLTP: (contractId: number) => void
 }
 
 import { getDerivAPI } from "../lib/deriv-api"
@@ -73,7 +96,12 @@ import { getDerivAPI } from "../lib/deriv-api"
 const MAX_TICK_HISTORY = 1000
 const MAX_OHLC_HISTORY = 500
 
-export const useTradingStore = create<TradingState>((set, get) => ({
+import { devtools, persist, createJSONStorage } from 'zustand/middleware';
+
+export const useTradingStore = create<TradingState>()(
+  devtools(
+    persist(
+      (set, get) => ({
   // Initial state
   symbols: [],
   currentSymbol: "R_100",
@@ -91,6 +119,9 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   isConnecting: false,
   error: null,
   lastConnected: null,
+  stopLoss: null,
+  takeProfit: null,
+  contractsSLTP: new Map(),
   barrier: null,
   barrierHigh: null,
   barrierLow: null,
@@ -98,14 +129,15 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   minBarrierOffset: null,
   maxBarrierOffset: null,
   pipSize: null,
+  derivPoints: Number(localStorage.getItem("deriv_points") || "0"), // Default to 0 points
 
   // Actions
   setSymbols: (symbols) => set({ symbols }),
 
-  setCurrentSymbol: (symbol) => set({ 
-    currentSymbol: symbol, 
-    tickHistory: [], 
-    currentTick: null, 
+  setCurrentSymbol: (symbol) => set({
+    currentSymbol: symbol,
+    tickHistory: [],
+    currentTick: null,
     totalTicksReceived: 0,
     ohlcHistory: [],
     currentOHLC: null,
@@ -115,10 +147,10 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
   setCurrentTick: (tick) => {
     const state = get()
-    
+
     // Check if this epoch already exists in history (deduplication)
     const existingIndex = state.tickHistory.findIndex(t => t.epoch === tick.epoch)
-    
+
     let newHistory: Tick[]
     if (existingIndex !== -1) {
       // Update existing tick with same epoch instead of adding duplicate
@@ -130,14 +162,14 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       // Sort by epoch to maintain strict ascending order
       newHistory.sort((a, b) => a.epoch - b.epoch)
     }
-    
+
     // Keep only the last MAX_TICK_HISTORY ticks
     if (newHistory.length > MAX_TICK_HISTORY) {
       newHistory.shift()
     }
 
-    set({ 
-      currentTick: tick, 
+    set({
+      currentTick: tick,
       tickHistory: newHistory,
       totalTicksReceived: state.totalTicksReceived + 1
     })
@@ -145,10 +177,10 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
   addTickToHistory: (tick) => {
     const state = get()
-    
+
     // Check if this epoch already exists in history (deduplication)
     const existingIndex = state.tickHistory.findIndex(t => t.epoch === tick.epoch)
-    
+
     let newHistory: Tick[]
     if (existingIndex !== -1) {
       // Update existing tick with same epoch instead of adding duplicate
@@ -160,7 +192,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       // Sort by epoch to maintain strict ascending order
       newHistory.sort((a, b) => a.epoch - b.epoch)
     }
-    
+
     if (newHistory.length > MAX_TICK_HISTORY) {
       newHistory.shift()
     }
@@ -172,10 +204,10 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
   setCurrentOHLC: (ohlc) => {
     const state = get()
-    
+
     // Check if this epoch already exists in history (deduplication)
     const existingIndex = state.ohlcHistory.findIndex(o => o.epoch === ohlc.epoch)
-    
+
     let newHistory: OHLC[]
     if (existingIndex !== -1) {
       // Update existing OHLC with same epoch instead of adding duplicate
@@ -187,24 +219,24 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       // Sort by epoch to maintain strict ascending order
       newHistory.sort((a, b) => a.epoch - b.epoch)
     }
-    
+
     // Keep only the last MAX_OHLC_HISTORY items
     if (newHistory.length > MAX_OHLC_HISTORY) {
       newHistory.shift()
     }
 
-    set({ 
-      currentOHLC: ohlc, 
+    set({
+      currentOHLC: ohlc,
       ohlcHistory: newHistory,
     })
   },
 
   addOHLCToHistory: (ohlc) => {
     const state = get()
-    
+
     // Check if this epoch already exists in history (deduplication)
     const existingIndex = state.ohlcHistory.findIndex(o => o.epoch === ohlc.epoch)
-    
+
     let newHistory: OHLC[]
     if (existingIndex !== -1) {
       // Update existing OHLC with same epoch instead of adding duplicate
@@ -216,7 +248,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       // Sort by epoch to maintain strict ascending order
       newHistory.sort((a, b) => a.epoch - b.epoch)
     }
-    
+
     if (newHistory.length > MAX_OHLC_HISTORY) {
       newHistory.shift()
     }
@@ -226,7 +258,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
 
   setOHLCHistory: (history) => set({ ohlcHistory: history }),
 
-  setChartStyle: (style) => set({ 
+  setChartStyle: (style) => set({
     chartStyle: style,
     tickHistory: [],
     ohlcHistory: [],
@@ -270,12 +302,34 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   setBarrierOffsetRange: (min, max) => set({ minBarrierOffset: min, maxBarrierOffset: max }),
   setPipSize: (pipSize) => set({ pipSize }),
 
+  // Stop Loss & Take Profit Actions
+  setStopLoss: (value) => set({ stopLoss: value }),
+  
+  setTakeProfit: (value) => set({ takeProfit: value }),
+  
+  setContractSLTP: (contractId, sl, tp) => set((state) => {
+    const newMap = new Map(state.contractsSLTP)
+    newMap.set(contractId, { stopLoss: sl, takeProfit: tp })
+    return { contractsSLTP: newMap }
+  }),
+  
+  getContractSLTP: (contractId) => {
+    const state = get()
+    return state.contractsSLTP.get(contractId)
+  },
+  
+  clearContractSLTP: (contractId) => set((state) => {
+    const newMap = new Map(state.contractsSLTP)
+    newMap.delete(contractId)
+    return { contractsSLTP: newMap }
+  }),
+
   fetchSymbols: async () => {
     const api = getDerivAPI()
     set({ isSymbolLoading: true })
     try {
       const allSymbols = await api.getActiveSymbols()
-      
+
       // Use all symbols returned by the API - it already filters appropriately
       // The API returns only valid, tradeable symbols
       console.log(`[TradingStore] Loaded ${allSymbols.length} symbols from API`)
@@ -284,6 +338,30 @@ export const useTradingStore = create<TradingState>((set, get) => ({
       console.error("Failed to fetch symbols", error)
       set({ isSymbolLoading: false })
     }
+  },
+
+  setDerivPoints: (points) => {
+    localStorage.setItem("deriv_points", String(points))
+    set({ derivPoints: points })
+  },
+
+  addDerivPoints: (points) => {
+    const state = get()
+    const newPoints = state.derivPoints + points
+    localStorage.setItem("deriv_points", String(newPoints))
+    set({ derivPoints: newPoints })
+  },
+
+  convertDerivPoints: (pointsToConvert) => {
+    const state = get()
+    // Conversion rate: 100 points = $1
+    const cashAmount = Math.floor(pointsToConvert / 100)
+    if (cashAmount > 0 && pointsToConvert >= 100) {
+      const newPoints = state.derivPoints - (cashAmount * 100)
+      localStorage.setItem("deriv_points", String(newPoints))
+      set({ derivPoints: newPoints })
+    }
+    return cashAmount
   },
 
   clearState: () => set({
@@ -303,12 +381,22 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     isConnecting: false,
     error: null,
     lastConnected: null,
+    stopLoss: null,
+    takeProfit: null,
+    contractsSLTP: new Map(),
     barrier: null,
+    barrierHigh: null,
+    barrierLow: null,
     barrierOffset: null,
     minBarrierOffset: null,
     maxBarrierOffset: null,
     pipSize: null,
   }),
-}))
-
-export default useTradingStore
+}),
+{
+  name: 'trading-store',
+  storage: createJSONStorage(() => sessionStorage),
+}
+)
+)
+);
