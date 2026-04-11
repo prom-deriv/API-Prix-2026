@@ -30,7 +30,7 @@ export interface GhostTradingPanelProps {
 const GhostTradingPanel: React.FC<GhostTradingPanelProps> = ({ onTradeStart }) => {
   const [isExpanded, setIsExpanded] = useState(true)
   const { currentSymbol, currentTick } = useTradingStore()
-  const { balance: demoBalance } = useAccount()
+  const { balance, accountType } = useAccount()
   const { addGhostTrade, settleGhostTrade, activeGhostTrade, mascotEmotion } = useGhost()
   
   const [amount, setAmount] = useState<string>("10")
@@ -96,8 +96,8 @@ const GhostTradingPanel: React.FC<GhostTradingPanelProps> = ({ onTradeStart }) =
       return
     }
 
-    if (tradeAmount > demoBalance) {
-      setError("Insufficient demo balance")
+    if (tradeAmount > balance) {
+      setError(`Insufficient ${accountType} balance`)
       return
     }
 
@@ -120,7 +120,7 @@ const GhostTradingPanel: React.FC<GhostTradingPanelProps> = ({ onTradeStart }) =
     if (onTradeStart) {
       onTradeStart(tradeAmount)
     }
-  }, [currentTick, amount, duration, durationUnit, currentSymbol, addGhostTrade, demoBalance, onTradeStart])
+  }, [currentTick, amount, duration, durationUnit, currentSymbol, addGhostTrade, balance, accountType, onTradeStart])
 
   const isDisabled = isTrading || !currentTick || !!activeGhostTrade
 
@@ -239,7 +239,7 @@ const GhostTradingPanel: React.FC<GhostTradingPanelProps> = ({ onTradeStart }) =
         {/* Stake Amount */}
         <div className="space-y-2">
           <label className="text-sm font-medium" style={{ color: "#8B5E3C" }}>
-            Stake Amount (Demo: {formatCurrency(demoBalance)})
+            Stake Amount ({accountType === "demo" ? "Demo" : "Real"}: {formatCurrency(balance)})
           </label>
           <Input
             type="text"
@@ -390,7 +390,7 @@ const GhostTradingPanel: React.FC<GhostTradingPanelProps> = ({ onTradeStart }) =
             border: "2px solid #B5C0D0"
           }}>
             <Sparkles className="h-3 w-3" />
-            Ghost Mode - No real trades
+            Ghost Mode
           </span>
         </div>
       </CardContent>

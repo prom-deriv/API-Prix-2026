@@ -56,7 +56,7 @@ function SurfTheWavesContent() {
     performTrick,
   } = useSurf()
 
-  const { balance: demoBalance, addBalance, deductBalance } = useAccount()
+  const { balance, addBalance, deductBalance, accountType } = useAccount()
 
   const tickUnsubscribeRef = useRef<(() => void) | null>(null)
   const loadingSymbolRef = useRef<string | null>(null)
@@ -514,7 +514,7 @@ function SurfTheWavesContent() {
                 color: "#0C4A6E",
                 border: "2px solid #0EA5E9"
               }}>
-                Demo: {formatCurrency(demoBalance)}
+                {accountType === "demo" ? "Demo" : "Real"}: {formatCurrency(balance)}
               </div>
               <div className="w-48">
                 <AssetSelector />
@@ -633,7 +633,7 @@ function SurfTheWavesContent() {
           isOpen={showSetupModal}
           onClose={() => setShowSetupModal(false)}
           onConfirm={handleConfirmSetup}
-          currentBalance={demoBalance}
+          currentBalance={balance}
           currentPrice={currentTick?.quote || 0}
           symbol={currentSymbol}
         />

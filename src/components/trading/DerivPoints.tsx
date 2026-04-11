@@ -6,7 +6,7 @@ import { Trophy, Coins, Sparkles, Info } from 'lucide-react';
 
 const DerivPoints = () => {
   const { derivPoints: totalPoints, convertDerivPoints: convertPoints } = useTradingStore();
-  const { balance: accountBalance, updateBalance } = useAccount();
+  const { balance: accountBalance, updateBalance, accountType } = useAccount();
   
   const handleConvert = () => {
     if (totalPoints >= 100) {
@@ -104,7 +104,7 @@ const DerivPoints = () => {
               <span className="font-medium text-foreground">How it works:</span> Earn 1 point for every $1 wagered on trades (win or lose)
             </p>
             <p className="text-muted-foreground">
-              <span className="font-medium text-foreground">Redemption:</span> Every 100 points = $1 cash (demo balance only)
+              <span className="font-medium text-foreground">Redemption:</span> Every 100 points = $1 cash ({accountType === "demo" ? "demo" : "real"} balance)
             </p>
           </div>
         </div>

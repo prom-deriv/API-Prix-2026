@@ -33,7 +33,7 @@ function MochiMotoContent() {
   } = useTradingStore()
 
   const { mascotEmotion, activeGhostTrade, mochiPoints } = useGhost()
-  const { balance: demoBalance, addBalance, deductBalance } = useAccount()
+  const { balance, addBalance, deductBalance, accountType } = useAccount()
 
   const tickUnsubscribeRef = useRef<(() => void) | null>(null)
   const loadingSymbolRef = useRef<string | null>(null)
@@ -283,7 +283,7 @@ function MochiMotoContent() {
                 color: "#8B5E3C",
                 border: "2px solid #DFF2D8"
               }}>
-                Demo: {formatCurrency(demoBalance)}
+                {accountType === "demo" ? "Demo" : "Real"}: {formatCurrency(balance)}
               </div>
               <AssetSelector className="w-48" />
               <Button variant="outline" size="sm" onClick={() => { clearState(); initializeAPI() }} disabled={isConnecting}

@@ -11,7 +11,7 @@ interface DepositWithdrawProps {
 }
 
 const DepositWithdraw: React.FC<DepositWithdrawProps> = ({ className }) => {
-  const { accountType, balance, currency, loginId } = useAccount()
+  const { accountType, balance, currency, loginId, addBalance } = useAccount()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -20,7 +20,8 @@ const DepositWithdraw: React.FC<DepositWithdrawProps> = ({ className }) => {
 
   const handleDeposit = async () => {
     if (!isReal) {
-      setError("Deposit is only available for real accounts")
+      addBalance(1000)
+      setSuccess("Added 1000 to demo balance")
       return
     }
 
@@ -62,22 +63,6 @@ const DepositWithdraw: React.FC<DepositWithdrawProps> = ({ className }) => {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  if (!isReal) {
-    return (
-      <Card className={cn("w-full", className)}>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Deposit & Withdraw</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 text-muted-foreground">
-            <AlertCircle className="h-4 w-4 flex-shrink-0" />
-            <span className="text-sm">Connect to a real account to deposit or withdraw funds.</span>
-          </div>
-        </CardContent>
-      </Card>
-    )
   }
 
   return (

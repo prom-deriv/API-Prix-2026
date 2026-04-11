@@ -192,7 +192,7 @@ export default function TradingSetupModal({
           <div className="rounded-lg p-3 flex items-start gap-2" style={{ backgroundColor: "#FEF3C7", border: "1px solid #FCD34D" }}>
             <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: "#F59E0B" }} />
             <div className="text-xs" style={{ color: "#92400E" }}>
-              <strong>Demo Mode:</strong> This is a practice session. Your score will be converted to profit/loss based on your prediction accuracy.
+              <strong>Surf Mode:</strong> This is a session where your score will be converted to profit/loss based on your prediction accuracy.
             </div>
           </div>
 

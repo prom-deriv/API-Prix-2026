@@ -42,7 +42,7 @@ const TradingPanel: React.FC = () => {
     symbols,
     isSymbolLoading,
   } = useTradingStore()
-  const { accountType, balance: accountBalance, updateBalance } = useAccount()
+  const { accountType, balance: accountBalance, updateBalance, deductBalance } = useAccount()
   const [amount, setAmount] = useState<string>("10")
   const [duration, setDuration] = useState<string>("5")
   const [durationUnit, setDurationUnit] = useState<DurationUnit>("t")
@@ -239,6 +239,16 @@ const TradingPanel: React.FC = () => {
     return new Promise((resolve) => {
       const tradeAmount = parseFloat(amount)
       const payout = proposal?.payout || tradeAmount * 1.8 // 80% payout for demo
+      
+      // Check balance
+      if (tradeAmount > accountBalance) {
+        setError(`Insufficient ${accountType} balance`)
+        setIsTrading(false)
+        return
+      }
+
+      // Deduct from balance
+      deductBalance(tradeAmount)
       
       // Capture entry tick at the start of the trade
       const entryTick = useTradingStore.getState().currentTick
@@ -466,8 +476,20 @@ const TradingPanel: React.FC = () => {
         }
         
         const api = getDerivAPI()
+        
+        // Check balance before buying real contract
+        const tradeAmount = parseFloat(amount)
+        if (tradeAmount > accountBalance) {
+          setError(`Insufficient ${accountType} balance`)
+          setIsTrading(false)
+          return
+        }
+
         const buyResult = await api.buyContract(currentProposal.id, currentProposal.ask_price)
         
+        // Deduct from balance
+        deductBalance(tradeAmount)
+
         // Track contract result for real accounts
         if (buyResult?.contract_id) {
           // Add to active contracts
