@@ -8,6 +8,7 @@ interface CharacterControllerProps {
   raceState: "idle" | "revving" | "racing" | "finished"
   priceChange: number
   tickHistory: Array<{ quote: number; epoch: number }>
+  roadY: number
 }
 
 // Character sprite URLs using local images
@@ -234,6 +235,7 @@ const CharacterController: React.FC<CharacterControllerProps> = ({
   raceState,
   priceChange,
   tickHistory,
+  roadY,
 }) => {
   // Jump physics state
   const [isJumping, setIsJumping] = useState(false)
@@ -349,9 +351,10 @@ const CharacterController: React.FC<CharacterControllerProps> = ({
     <div 
       className="absolute left-1/2 transform -translate-x-1/2 flex items-end gap-8" 
       style={{ 
-        bottom: "35%", 
+        top: roadY > 0 ? `${roadY - 10}px` : "65%", // Position container's top at roadY (offset slightly for tire placement)
         zIndex: 20,
-        transform: `translateX(-50%) translateY(${jumpY}px)`,
+        transform: `translateX(-50%) translateY(calc(-100% + ${jumpY}px))`, // Shift up by 100% so the bottom rests on roadY, then apply jump
+        transition: "top 0.1s ease-out", // Smoothly follow the road
       }}
     >
       {/* Bubu (Lead Character) */}

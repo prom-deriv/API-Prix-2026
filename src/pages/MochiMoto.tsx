@@ -44,6 +44,8 @@ function MochiMotoContent() {
   const [scrollOffset, setScrollOffset] = useState(0)
   const [slope, setSlope] = useState(0)
   const [speed, setSpeed] = useState(0)
+  const [roadY, setRoadY] = useState(0)
+  const getRoadYRef = useRef<((x: number) => number) | null>(null)
 
   // Calculate slope from recent ticks
   const calculateSlope = useCallback((ticks: typeof tickHistory) => {
@@ -178,6 +180,12 @@ function MochiMotoContent() {
       setScrollOffset(prev => prev + (raceState === "racing" ? 2 : 0.5))
       setSlope(calculateSlope(tickHistory))
       setSpeed(raceState === "racing" ? 60 : raceState === "revving" ? 0 : 20)
+      
+      // Update road Y position for center of screen
+      if (getRoadYRef.current) {
+        const centerScreenX = window.innerWidth / 2
+        setRoadY(getRoadYRef.current(centerScreenX))
+      }
     }
 
     const interval = setInterval(gameLoop, 1000 / 60) // 60fps
@@ -326,6 +334,9 @@ function MochiMotoContent() {
               tickHistory={tickHistory}
               scrollOffset={scrollOffset}
               raceState={raceState}
+              onRoadPositionChange={(getRoadY) => {
+                getRoadYRef.current = getRoadY
+              }}
             />
             <CharacterController
               emotion={mascotEmotion}
@@ -333,6 +344,7 @@ function MochiMotoContent() {
               raceState={raceState}
               priceChange={priceChange}
               tickHistory={tickHistory}
+              roadY={roadY}
             />
           </ErrorBoundary>
         </div>

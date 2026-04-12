@@ -60,7 +60,7 @@ function catmullRomSpline(
 function generateDefaultTrack(width: number, height: number): { x: number; y: number }[] {
   const points: { x: number; y: number }[] = []
   const numPoints = 20
-  const centerY = height * 0.6
+  const centerY = height * 0.75 // Lower the base position of the road
   const amplitude = height * 0.1
 
   for (let i = 0; i < numPoints; i++) {
@@ -118,7 +118,7 @@ const ProceduralTrack: React.FC<ProceduralTrackProps> = ({
 
     return tickHistory.map((tick, i) => ({
       x: (i / (tickHistory.length - 1)) * width,
-      y: height * 0.6 - ((tick.quote - minQuote) / range) * height * 0.3,
+      y: height * 0.8 - ((tick.quote - minQuote) / range) * height * 0.4, // Base at 80% height, peaks up to 40% height
     }))
   }, [tickHistory, dimensions])
 
@@ -292,26 +292,24 @@ const ProceduralTrack: React.FC<ProceduralTrackProps> = ({
 
   // Get road Y position at a given X coordinate (for character positioning)
   const getRoadYAtX = useCallback((x: number): number => {
-    if (smoothPoints.length < 2) return dimensions.height * 0.6
+    if (smoothPoints.length < 2) return dimensions.height * 0.75
 
-    const offsetX = scrollOffset % dimensions.width
-    const normalizedX = x - offsetX
+    const scrollShift = scrollOffset % dimensions.width
+    // Map screen X coordinate back to the normalized track X coordinate
+    // Add dimensions.width before modulo to ensure positive result
+    const normalizedX = (x + scrollShift + dimensions.width) % dimensions.width
 
-    // Find the two closest points
-    let closestIndex = 0
-    let minDist = Infinity
+    // Find the two points that bound normalizedX
+    let p1 = smoothPoints[0]
+    let p2 = smoothPoints[smoothPoints.length - 1]
 
-    for (let i = 0; i < smoothPoints.length; i++) {
-      const dist = Math.abs(smoothPoints[i].x - normalizedX)
-      if (dist < minDist) {
-        minDist = dist
-        closestIndex = i
+    for (let i = 0; i < smoothPoints.length - 1; i++) {
+      if (smoothPoints[i].x <= normalizedX && smoothPoints[i + 1].x >= normalizedX) {
+        p1 = smoothPoints[i]
+        p2 = smoothPoints[i + 1]
+        break
       }
     }
-
-    // Interpolate between two closest points
-    const p1 = smoothPoints[closestIndex]
-    const p2 = smoothPoints[Math.min(closestIndex + 1, smoothPoints.length - 1)]
 
     if (p1.x === p2.x) return p1.y
 
