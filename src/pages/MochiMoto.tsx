@@ -3,7 +3,7 @@ import { Link } from "react-router-dom"
 import { getDerivAPI } from "../lib/deriv-api"
 import { useTradingStore } from "../stores/tradingStore"
 import { GhostProvider, useGhost } from "../contexts/GhostContext"
-import { AccountProvider, useAccount } from "../contexts/AccountContext"
+import { useAccount } from "../contexts/AccountContext"
 import { getSoundManager } from "../utils/soundManager"
 import ProceduralTrack from "../components/mochi/ProceduralTrack"
 import CharacterController from "../components/mochi/CharacterController"
@@ -474,11 +474,9 @@ function MochiMotoContent() {
 
 function MochiMoto() {
   return (
-    <AccountProvider>
-      <GhostProviderWithAccount>
-        <MochiMotoContent />
-      </GhostProviderWithAccount>
-    </AccountProvider>
+    <GhostProviderWithAccount>
+      <MochiMotoContent />
+    </GhostProviderWithAccount>
   )
 }
 

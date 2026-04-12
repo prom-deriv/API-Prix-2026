@@ -3,7 +3,7 @@ import { Link } from "react-router-dom"
 import { getDerivAPI } from "../lib/deriv-api"
 import { useTradingStore } from "../stores/tradingStore"
 import { SurfProvider, useSurf } from "../contexts/SurfContext"
-import { AccountProvider, useAccount } from "../contexts/AccountContext"
+import { useAccount } from "../contexts/AccountContext"
 import OceanBackground from "../components/surf/OceanBackground"
 import WaveFormation from "../components/surf/WaveFormation"
 import SurferCharacter from "../components/surf/SurferCharacter"
@@ -786,11 +786,9 @@ function SurfTheWavesContent() {
 
 function SurfTheWaves() {
   return (
-    <AccountProvider>
-      <SurfProvider>
-        <SurfTheWavesContent />
-      </SurfProvider>
-    </AccountProvider>
+    <SurfProvider>
+      <SurfTheWavesContent />
+    </SurfProvider>
   )
 }
 

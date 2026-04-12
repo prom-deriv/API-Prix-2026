@@ -1,7 +1,6 @@
 import { useEffect, useCallback, useRef } from "react"
 import { getDerivAPI } from "../lib/deriv-api"
 import { useTradingStore } from "../stores/tradingStore"
-import { AccountProvider } from "../contexts/AccountContext"
 import TradingChart from "../components/charts/TradingChart"
 import TradingPanel from "../components/trading/TradingPanel"
 import TradeHistory from "../components/trading/TradeHistory"
@@ -415,8 +414,7 @@ function Home() {
     : 0
 
   return (
-    <AccountProvider>
-      <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
@@ -536,7 +534,6 @@ function Home() {
         </div>
       </main>
     </div>
-    </AccountProvider>
   )
 }
 
