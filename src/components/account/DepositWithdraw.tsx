@@ -11,18 +11,12 @@ interface DepositWithdrawProps {
 }
 
 const DepositWithdraw: React.FC<DepositWithdrawProps> = ({ className }) => {
-  const { accountType, balance, currency, loginId, addBalance, resetBalance } = useAccount()
+  const { accountType, currency } = useAccount()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
   const isReal = accountType === "real"
-
-  const handleResetDemoBalance = () => {
-    resetBalance()
-    setSuccess("Demo balance reset to $10,000")
-    setTimeout(() => setSuccess(null), 3000)
-  }
 
   const handleDeposit = async () => {
     if (!isReal) {
@@ -75,19 +69,6 @@ const DepositWithdraw: React.FC<DepositWithdrawProps> = ({ className }) => {
       <CardHeader className="pb-3">
         <div className="flex justify-between items-center">
           <CardTitle className="text-lg">Deposit & Withdraw</CardTitle>
-          {!isReal && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleResetDemoBalance}
-              className="h-7 text-xs"
-            >
-              Reset Balance
-            </Button>
-          )}
-        </div>
-        <div className="text-sm text-muted-foreground">
-          Account: {loginId} · Balance: {currency} {balance.toFixed(2)}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -139,11 +120,6 @@ const DepositWithdraw: React.FC<DepositWithdrawProps> = ({ className }) => {
             </div>
           </Button>
         </div>
-        {!isReal && (
-          <p className="text-xs text-center text-muted-foreground bg-secondary/50 p-2 rounded-md">
-            Deposit and withdraw are only available for real accounts.
-          </p>
-        )}
         <p className="text-[10px] text-muted-foreground text-center">
           <button 
             onClick={handleDeposit} 
