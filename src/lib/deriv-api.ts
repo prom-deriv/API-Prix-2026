@@ -1725,9 +1725,8 @@ class DerivAPI {
   /**
    * Get deposit cashier URL via WebSocket
    * Opens Deriv's hosted deposit page in a new tab
-   * @param currency - Currency code (default: "USD")
    */
-  async deposit(currency: string = "USD"): Promise<string> {
+  async deposit(): Promise<string> {
     const reqId = this.getNextReqId()
 
     const isReady = await this.waitUntilReady(10000)
@@ -1764,9 +1763,8 @@ class DerivAPI {
   /**
    * Get withdrawal cashier URL via WebSocket
    * Opens Deriv's hosted withdrawal page in a new tab
-   * @param currency - Currency code (default: "USD")
    */
-  async withdraw(currency: string = "USD"): Promise<string> {
+  async withdraw(): Promise<string> {
     const reqId = this.getNextReqId()
 
     const isReady = await this.waitUntilReady(10000)
