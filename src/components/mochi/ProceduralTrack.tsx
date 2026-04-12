@@ -115,7 +115,7 @@ const ProceduralTrack: React.FC<ProceduralTrackProps> = ({
 
     // Apply moving average smoothing to the quotes
     const windowSize = 5;
-    const smoothedQuotes = quotes.map((_, idx, arr) => {
+    const smoothedQuotes = quotes.map((_val, idx, arr) => {
       const start = Math.max(0, idx - windowSize);
       const end = Math.min(arr.length, idx + windowSize + 1);
       const window = arr.slice(start, end);
