@@ -4,6 +4,7 @@ import { getDerivAPI } from "../lib/deriv-api"
 import { useTradingStore } from "../stores/tradingStore"
 import { GhostProvider, useGhost } from "../contexts/GhostContext"
 import { AccountProvider, useAccount } from "../contexts/AccountContext"
+import { getSoundManager } from "../utils/soundManager"
 import ProceduralTrack from "../components/mochi/ProceduralTrack"
 import CharacterController from "../components/mochi/CharacterController"
 import ParallaxBackground from "../components/mochi/ParallaxBackground"
@@ -14,7 +15,7 @@ import ErrorBoundary from "../components/ui/ErrorBoundary"
 import { Card, CardContent } from "../components/ui/card"
 import { Button } from "../components/ui/button"
 import { formatNumber, formatCurrency } from "../lib/utils"
-import { Wifi, WifiOff, RefreshCw, ArrowLeft, Gamepad2, Trophy, Zap } from "lucide-react"
+import { Wifi, WifiOff, RefreshCw, ArrowLeft, Gamepad2, Trophy, Zap, ArrowUp, ArrowDown } from "lucide-react"
 
 function MochiMotoContent() {
   const {
@@ -46,6 +47,8 @@ function MochiMotoContent() {
   const [speed, setSpeed] = useState(0)
   const [roadY, setRoadY] = useState(0)
   const getRoadYRef = useRef<((x: number) => number) | null>(null)
+  
+  const stopDrivingSoundRef = useRef<(() => void) | null>(null)
 
   // Calculate slope from recent ticks
   const calculateSlope = useCallback((ticks: typeof tickHistory) => {
@@ -161,16 +164,36 @@ function MochiMotoContent() {
 
   // Update race state based on active trade
   useEffect(() => {
+    const sm = getSoundManager()
+
     if (activeGhostTrade) {
       setRaceState("revving")
-      const timer = setTimeout(() => setRaceState("racing"), 1000)
+      sm.playEngineRev()
+      
+      const timer = setTimeout(() => {
+        setRaceState("racing")
+        stopDrivingSoundRef.current = sm.playEngineDriving()
+      }, 1000)
+      
       return () => clearTimeout(timer)
     } else if (raceState === "racing") {
       setRaceState("finished")
+      
+      if (stopDrivingSoundRef.current) {
+        stopDrivingSoundRef.current()
+        stopDrivingSoundRef.current = null
+      }
+      
+      if (mascotEmotion === "win") {
+        sm.playSessionEnd(true)
+      } else if (mascotEmotion === "lose") {
+        sm.playSessionEnd(false)
+      }
+
       const timer = setTimeout(() => setRaceState("idle"), 3000)
       return () => clearTimeout(timer)
     }
-  }, [activeGhostTrade])
+  }, [activeGhostTrade, mascotEmotion])
 
   // Game loop for scrolling and slope calculation
   useEffect(() => {
@@ -237,6 +260,7 @@ function MochiMotoContent() {
   const lastTick = tickHistory?.[tickHistory.length - 1]
   const secondLastTick = tickHistory?.[tickHistory.length - 2]
   const priceChange = lastTick && secondLastTick ? lastTick.quote - secondLastTick.quote : 0
+  const priceChangePercent = secondLastTick ? (Math.abs(priceChange) / secondLastTick.quote) * 100 : 0
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden" style={{ backgroundColor: "#FFF9F2" }}>
@@ -361,17 +385,25 @@ function MochiMotoContent() {
               <div className="flex items-center gap-4">
                 <div className="text-center">
                   <p className="text-xs" style={{ color: "#8B5E3C", opacity: 0.6 }}>Price</p>
-                  <p className="text-lg font-bold" style={{ color: "#8B5E3C" }}>
-                    {currentTick ? formatNumber(currentTick.quote, 5) : "---"}
-                  </p>
+                  <div className="flex items-center justify-center gap-1">
+                    <p className="text-lg font-bold" style={{ color: "#8B5E3C" }}>
+                      {currentTick ? formatNumber(currentTick.quote, 5) : "---"}
+                    </p>
+                    {currentTick && secondLastTick && priceChange !== 0 && (
+                      <div className={`flex items-center text-sm font-bold ${priceChange > 0 ? "text-green-600" : "text-red-500"}`}>
+                        {priceChange > 0 ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                        <span>{priceChangePercent.toFixed(4)}%</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="h-8 w-px" style={{ backgroundColor: "#F0E4D7" }} />
                 <div className="text-center">
                   <p className="text-xs" style={{ color: "#8B5E3C", opacity: 0.6 }}>Race</p>
                   <p className="text-lg font-bold capitalize" style={{ 
-                    color: raceState === "racing" ? "#DFF2D8" : 
-                           raceState === "revving" ? "#FFE5F0" : 
-                           raceState === "finished" ? "#B5C0D0" : "#8B5E3C"
+                    color: raceState === "racing" ? "#2E7D32" : 
+                           raceState === "revving" ? "#FF6B9D" : 
+                           raceState === "finished" ? "#64748B" : "#8B5E3C"
                   }}>
                     {raceState}
                   </p>

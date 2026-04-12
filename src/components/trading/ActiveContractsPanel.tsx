@@ -12,7 +12,7 @@ const formatTimeLeft = (expiry: number) => {
   if (diff === 0) return "00:00"
   const h = Math.floor(diff / 3600)
   const m = Math.floor((diff % 3600) / 60)
-  const s = diff % 60
+  const s = Math.floor(diff % 60)
   if (h > 0) return `${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
 }
@@ -78,7 +78,7 @@ export default function ActiveContractsPanel() {
 
   if (activeContracts.length === 0) {
     return (
-      <Card className="p-6">
+      <Card className="p-6 h-full flex flex-col justify-center items-center">
         <div className="text-center text-gray-500">
           <DollarSign className="w-12 h-12 mx-auto mb-2 opacity-50" />
           <p className="text-sm">No active contracts</p>
@@ -90,7 +90,7 @@ export default function ActiveContractsPanel() {
 
   return (
     <>
-      <Card className="p-4">
+      <Card className="p-4 h-full flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">
             Active Contracts ({activeContracts.length})

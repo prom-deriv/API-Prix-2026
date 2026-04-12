@@ -323,7 +323,87 @@ class SoundManager {
   }
 
   /**
-   * Play whoosh sound for surfing
+   * Play engine revving sound for racing
+   */
+  playEngineRev() {
+    if (!this.ensureContext() || !this.isEnabled) return
+
+    try {
+      const ctx = this.audioContext!
+      const oscillator = ctx.createOscillator()
+      const gain = ctx.createGain()
+
+      oscillator.type = 'sawtooth'
+      oscillator.frequency.setValueAtTime(60, ctx.currentTime) // Low idle
+      oscillator.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.5) // Rev up
+      oscillator.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 1.0) // Drop
+
+      gain.gain.setValueAtTime(0.2, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.0)
+
+      oscillator.connect(gain)
+      gain.connect(this.masterGain!)
+
+      oscillator.start()
+      oscillator.stop(ctx.currentTime + 1.0)
+    } catch (err) {
+      console.warn("[SoundManager] Failed to play engine rev sound:", err)
+    }
+  }
+
+  /**
+   * Play continuous engine driving sound
+   */
+  playEngineDriving(): (() => void) | null {
+    if (!this.ensureContext() || !this.isEnabled) return null
+
+    try {
+      const ctx = this.audioContext!
+      const oscillator = ctx.createOscillator()
+      const gain = ctx.createGain()
+      const filter = ctx.createBiquadFilter()
+
+      oscillator.type = 'sawtooth'
+      oscillator.frequency.value = 120 // Mid rumble
+
+      filter.type = 'lowpass'
+      filter.frequency.value = 800
+      filter.Q.value = 1
+
+      gain.gain.value = 0.1 // Subtle volume
+
+      oscillator.connect(filter)
+      filter.connect(gain)
+      gain.connect(this.masterGain!)
+
+      oscillator.start()
+
+      // LFO for engine purr
+      const lfo = ctx.createOscillator()
+      const lfoGain = ctx.createGain()
+      lfo.frequency.value = 15 // Purr speed
+      lfoGain.gain.value = 10
+      lfo.connect(lfoGain)
+      lfoGain.connect(oscillator.frequency)
+      lfo.start()
+
+      return () => {
+        try {
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5)
+          setTimeout(() => {
+            oscillator.stop()
+            lfo.stop()
+          }, 500)
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.warn("[SoundManager] Failed to play engine driving sound:", err)
+      return null
+    }
+  }
+
+  /**
+   * Play whoosh sound for surfing or overtaking
    */
   playWhoosh() {
     if (!this.ensureContext() || !this.isEnabled) return

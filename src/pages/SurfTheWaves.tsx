@@ -388,9 +388,9 @@ function SurfTheWavesContent() {
     return () => clearInterval(timer)
   }, [currentSession, activeSetup])
 
-  // Sound effects for ocean ambient, whoosh, and wave crashes
+  // Background ocean ambient sound (continuous)
   useEffect(() => {
-    if (!currentSession || !soundEnabled) {
+    if (!soundEnabled) {
       if (oceanAmbientCleanupRef.current) {
         oceanAmbientCleanupRef.current()
         oceanAmbientCleanupRef.current = null
@@ -399,15 +399,48 @@ function SurfTheWavesContent() {
     }
 
     const soundMgr = getSoundManager()
-    
-    // Start ocean ambient with fallback
-    const cleanup = soundMgr.playOceanAmbient()
-    if (cleanup) {
-      oceanAmbientCleanupRef.current = cleanup
-      console.log("[SurfTheWaves] Ocean ambient started")
-    } else {
-      console.warn("[SurfTheWaves] Ocean ambient failed to start - may need user interaction")
+
+    const startAmbient = () => {
+      if (!oceanAmbientCleanupRef.current) {
+        const cleanup = soundMgr.playOceanAmbient()
+        if (cleanup) {
+          oceanAmbientCleanupRef.current = cleanup
+          console.log("[SurfTheWaves] Ocean ambient started")
+        }
+      }
     }
+
+    // Attempt to start immediately
+    startAmbient()
+
+    // Browsers block autoplay without interaction. 
+    // Listen to user interaction events to start audio context.
+    const handleInteraction = () => {
+      startAmbient()
+      window.removeEventListener('click', handleInteraction)
+      window.removeEventListener('keydown', handleInteraction)
+    }
+
+    window.addEventListener('click', handleInteraction)
+    window.addEventListener('keydown', handleInteraction)
+
+    return () => {
+      window.removeEventListener('click', handleInteraction)
+      window.removeEventListener('keydown', handleInteraction)
+      if (oceanAmbientCleanupRef.current) {
+        oceanAmbientCleanupRef.current()
+        oceanAmbientCleanupRef.current = null
+      }
+    }
+  }, [soundEnabled])
+
+  // Sound effects for whoosh, and wave crashes during session
+  useEffect(() => {
+    if (!currentSession || !soundEnabled) {
+      return
+    }
+
+    const soundMgr = getSoundManager()
 
     // Add periodic whoosh sounds during riding
     const whooshInterval = setInterval(() => {
@@ -426,19 +459,12 @@ function SurfTheWavesContent() {
     return () => {
       clearInterval(whooshInterval)
       clearInterval(waveCrashInterval)
-      if (oceanAmbientCleanupRef.current) {
-        oceanAmbientCleanupRef.current()
-        oceanAmbientCleanupRef.current = null
-      }
     }
   }, [currentSession, soundEnabled])
 
   const handleStartSetup = () => {
     if (tickHistory.length > 0) {
       setShowSetupModal(true)
-      // Resume audio context on user interaction
-      const soundMgr = getSoundManager()
-      soundMgr.playOceanAmbient()
     }
   }
 
@@ -456,7 +482,6 @@ function SurfTheWavesContent() {
       // Play session start sound
       const soundMgr = getSoundManager()
       soundMgr.playSessionStart()
-      soundMgr.playOceanAmbient() // Ensure ambient is playing
     }
   }
 

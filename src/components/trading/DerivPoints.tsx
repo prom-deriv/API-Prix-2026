@@ -27,7 +27,7 @@ const DerivPoints = () => {
   const canConvert = totalPoints >= 100;
 
   return (
-    <Card className="mb-4 relative overflow-hidden border-amber-500/20 bg-gradient-to-br from-card via-card to-amber-950/10">
+    <Card className="h-full flex flex-col relative overflow-hidden border-amber-500/20 bg-gradient-to-br from-card via-card to-amber-950/10">
       {/* Decorative gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent pointer-events-none" />
       
@@ -42,7 +42,8 @@ const DerivPoints = () => {
         </CardTitle>
       </CardHeader>
       
-      <CardContent className="space-y-3 relative">
+      <CardContent className="space-y-3 relative flex-1 flex flex-col justify-between">
+        <div className="space-y-3">
         {/* Points Display with Redeem Button */}
         <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-muted/30 border border-amber-500/10">
           <div className="flex items-center gap-2">
@@ -96,8 +97,10 @@ const DerivPoints = () => {
           </div>
         </div>
 
+        </div>
+
         {/* Info Section */}
-        <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/10">
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/10 mt-auto">
           <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
           <div className="space-y-1 text-xs">
             <p className="text-muted-foreground">

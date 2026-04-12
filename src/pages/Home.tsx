@@ -455,7 +455,6 @@ function Home() {
                   Surf Waves
                 </Button>
               </Link>
-              <AssetSelector className="w-48" />
               <Button variant="outline" size="sm" onClick={() => { clearState(); initializeAPI() }} disabled={isConnecting}>
                 <RefreshCw className={`h-4 w-4 ${isConnecting ? "animate-spin" : ""}`} />
               </Button>
@@ -473,78 +472,67 @@ function Home() {
       <main className="container mx-auto px-4 py-4 md:py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           <div className="lg:col-span-2 space-y-4">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold">{currentSymbolData?.display_name || currentSymbol}</h2>
-                    <p className="text-sm text-muted-foreground">{currentSymbolData?.market_display_name}</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold">{currentTick ? formatNumber(currentTick.quote, 5) : "---"}</div>
-                    <div className={`flex items-center gap-1 text-sm ${priceChange >= 0 ? "text-profit" : "text-loss"}`}>
-                      {priceChange >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                      <span>{formatPercentage(priceChangePercent)}</span>
-                    </div>
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+              <div className="w-full sm:w-auto flex-1 max-w-sm">
+                <AssetSelector className="w-full" />
+                <p className="text-sm text-muted-foreground mt-1 px-1">{currentSymbolData?.market_display_name}</p>
+              </div>
+              <div className="text-right w-full sm:w-auto bg-card rounded-lg p-3 border shadow-sm flex items-center gap-4">
+                <div>
+                  <div className="text-2xl font-bold">{currentTick ? formatNumber(currentTick.quote, 5) : "---"}</div>
+                  <div className={`flex items-center gap-1 text-sm justify-end ${priceChange >= 0 ? "text-profit" : "text-loss"}`}>
+                    {priceChange >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                    <span>{formatPercentage(priceChangePercent)}</span>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="h-10 w-px bg-border mx-2 hidden sm:block"></div>
+                <div className="hidden sm:flex flex-col gap-1 text-xs text-right min-w-[80px]">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">H:</span>
+                    <span className="text-profit font-medium">{highValue !== null ? formatNumber(highValue, 5) : "---"}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">L:</span>
+                    <span className="text-loss font-medium">{lowValue !== null ? formatNumber(lowValue, 5) : "---"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-            <Card>
-              <CardContent className="p-4">
+            <Card className="overflow-hidden flex flex-col border shadow-sm">
+              <div className="border-b bg-muted/20 p-2 flex justify-between items-center">
+                <span className="text-sm font-medium px-2 text-muted-foreground flex items-center gap-2">
+                  <Gamepad2 className="h-4 w-4" /> Chart
+                </span>
                 <ChartStyleSelector />
-              </CardContent>
-            </Card>
-            
-            <Card className="h-[400px]">
-              <CardContent className="p-0 h-full">
+              </div>
+              <CardContent className="p-0 h-[450px]">
                 <ErrorBoundary>
                   <TradingChart className="h-full" />
                 </ErrorBoundary>
               </CardContent>
             </Card>
 
-             <div className="grid grid-cols-3 gap-4">
-               <Card>
-                 <CardContent className="p-4 text-center">
-                   <p className="text-sm text-muted-foreground">High</p>
-                   <p className="text-lg font-semibold text-profit">
-                     {highValue !== null ? formatNumber(highValue, 5) : "---"}
-                   </p>
-                 </CardContent>
-               </Card>
-               <Card>
-                 <CardContent className="p-4 text-center">
-                   <p className="text-sm text-muted-foreground">Low</p>
-                   <p className="text-lg font-semibold text-loss">
-                     {lowValue !== null ? formatNumber(lowValue, 5) : "---"}
-                   </p>
-                 </CardContent>
-               </Card>
-               <Card>
-                 <CardContent className="p-4 text-center">
-                   <p className="text-sm text-muted-foreground">
-                     {chartStyle === 'ohlc' || chartStyle === 'candlestick' ? 'Candles' : 'Ticks'}
-                   </p>
-                   <p className="text-lg font-semibold">
-                     {chartStyle === 'ohlc' || chartStyle === 'candlestick' ? ohlcHistory.length : totalTicksReceived}
-                   </p>
-                 </CardContent>
-               </Card>
-             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ActiveContractsPanel />
+              <DerivPoints />
+            </div>
 
-             <ActiveContractsPanel />
-             <DerivPoints />
              <TradeHistory />
           </div>
 
           <div className="lg:col-span-1 space-y-4">
-            <AccountSwitcher />
-            <DepositWithdraw />
             <TradingPanel />
-            <AccountSnapshot />
-            <AIAssistant />
+            <div className="border-t pt-4 mt-2 space-y-4">
+              <h3 className="text-sm font-medium text-muted-foreground px-1 uppercase tracking-wider">Account & Wallet</h3>
+              <AccountSwitcher />
+              <DepositWithdraw />
+              <AccountSnapshot />
+            </div>
+            <div className="border-t pt-4 mt-2">
+              <h3 className="text-sm font-medium text-muted-foreground px-1 uppercase tracking-wider mb-3">AI Assistant</h3>
+              <AIAssistant />
+            </div>
           </div>
         </div>
       </main>

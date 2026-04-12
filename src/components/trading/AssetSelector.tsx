@@ -172,9 +172,8 @@ const AssetSelector: React.FC<AssetSelectorProps> = ({ className, disabled }) =>
           disabled={disabled}
           className={cn(
             "w-full flex items-center justify-between px-3 h-9 rounded-md transition-all duration-200 shadow-sm",
-            "bg-white hover:bg-yellow-50 border-2",
+            "bg-white hover:bg-yellow-50 border-2 border-[#FFD700]",
             "focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2",
-            isOpen ? "border-yellow-600" : "border-[#FFD700]",
             disabled && "opacity-50 cursor-not-allowed hover:bg-white"
           )}
           aria-expanded={isOpen}
