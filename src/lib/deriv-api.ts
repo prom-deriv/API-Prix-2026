@@ -58,6 +58,7 @@ class DerivAPI {
   private pendingRequestsQueue: Array<() => void> = [] // Queue for requests sent before WebSocket is ready
   private isSubscribing: boolean = false // Mutex to prevent concurrent subscription requests
   private isHandlingAuth: boolean = false // Mutex to prevent duplicate auth handling
+  private authToken: string | null = null
 
   constructor() {
     // Don't auto-connect in constructor - let the app control when to connect
@@ -110,40 +111,6 @@ class DerivAPI {
   async initialize(): Promise<void> {
     if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
       return
-    }
-
-    // Check if we have a real account that should be auto-connecting via AccountContext
-    const accountType = localStorage.getItem("account_type")
-    const hasToken = !!localStorage.getItem("deriv_access_token")
-
-    if (accountType === "real" && hasToken) {
-      console.log("[DerivAPI] Waiting for AccountContext to establish OTP connection...")
-      this.isConnecting = true // Set to true to prevent concurrent initializations
-
-      // Wait up to 15 seconds for AccountContext to connect the OTP WebSocket
-      return new Promise<void>((resolve) => {
-        const timeout = setTimeout(() => {
-          console.warn("[DerivAPI] Timed out waiting for OTP connection, falling back to public endpoint")
-          this.isConnecting = false
-          this.connect().then(resolve).catch(() => resolve())
-        }, 15000)
-
-        const checkAuth = setInterval(() => {
-          if (this.isConnectedState && this.isAuthorized && this.currentWsUrl !== WS_PUBLIC_URL) {
-            clearInterval(checkAuth)
-            clearTimeout(timeout)
-            console.log("[DerivAPI] OTP connection confirmed!")
-            this.isConnecting = false
-            resolve()
-          } else if (this.isConnectedState && this.currentWsUrl === WS_PUBLIC_URL) {
-             // Fallback public connection already established
-             clearInterval(checkAuth)
-             clearTimeout(timeout)
-             this.isConnecting = false
-             resolve()
-          }
-        }, 100)
-      })
     }
 
     return this.connect()
@@ -277,16 +244,21 @@ class DerivAPI {
           this.reconnectAttempts = 0
           this.lastPong = Date.now()
 
-          // New Deriv API public endpoint doesn't require authorize message
-          // Mark as authorized immediately for public data access
-          this.isAuthorized = true
+          // If we have a stored auth token, automatically re-authenticate
+          if (this.authToken) {
+            console.log("[DerivAPI] Auto-authenticating with stored token...")
+            this.send({ authorize: this.authToken, req_id: this.getNextReqId() })
+          } else {
+            // New Deriv API public endpoint doesn't require authorize message
+            // Mark as authorized immediately for public data access
+            this.isAuthorized = true
+            this.flushRequestQueue()
+          }
 
           // Emit connection event
           this.startPingInterval()
           this.emit("connection", { connected: true })
 
-          // Flush any queued requests
-          this.flushRequestQueue()
           resolve()
         }
 
@@ -622,6 +594,39 @@ class DerivAPI {
   }
 
   // Public API Methods
+
+  async authorize(token: string): Promise<any> {
+    const reqId = this.getNextReqId()
+    this.authToken = token
+
+    return new Promise((resolve, reject) => {
+      this.pendingRequests.set(reqId, {
+        resolve: (data: any) => {
+          if (data.authorize) {
+            this.isAuthorized = true
+            resolve(data.authorize)
+          } else if (data.error) {
+            reject(new Error(data.error.message || "Authorization failed"))
+          } else {
+            reject(new Error("Authorization failed"))
+          }
+        },
+        reject,
+      })
+
+      this.send({
+        authorize: token,
+        req_id: reqId,
+      })
+
+      setTimeout(() => {
+        if (this.pendingRequests.has(reqId)) {
+          this.pendingRequests.delete(reqId)
+          reject(new Error("Request timeout"))
+        }
+      }, 15000)
+    })
+  }
 
   on(event: string, handler: MessageHandler): () => void {
     if (!this.handlers.has(event)) {
@@ -1941,6 +1946,7 @@ class DerivAPI {
     this.isConnecting = false
     this.isConnectedState = false
     this.isAuthorized = false
+    this.authToken = null
     this.handlers.clear()
     this.pendingRequests.clear()
     this.subscriptions.clear()

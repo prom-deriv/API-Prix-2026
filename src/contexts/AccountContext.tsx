@@ -97,36 +97,18 @@ export function AccountProvider({ children }: AccountProviderProps) {
     try {
       const api = getDerivAPI()
       
-      // Step 1: Get accounts list to find the account ID
-      console.log("[AccountContext] Fetching accounts...")
-      const accountsResponse = await api.getAccounts(accessToken)
-      console.log("[AccountContext] Accounts response:", accountsResponse)
+      // Step 1: Connect WebSocket
+      console.log("[AccountContext] Connecting WebSocket...")
+      await api.initialize()
       
-      // Find the first account (or the one we want to use)
-      const account = accountsResponse.data?.[0]
-      if (!account) {
-        throw new Error("No trading accounts found")
-      }
+      // Step 2: Authenticate with token
+      console.log("[AccountContext] Authenticating with token...")
+      const authResponse = await api.authorize(accessToken)
+      console.log("[AccountContext] Authentication successful:", authResponse)
       
-      const accountId = account.account_id
-      console.log("[AccountContext] Using account:", accountId)
-      
-      // Step 2: Get OTP for WebSocket authentication
-      console.log("[AccountContext] Getting OTP for WebSocket...")
-      const otpResponse = await api.getWebSocketUrl(accessToken, accountId)
-      console.log("[AccountContext] OTP response received")
-      
-      // Step 3: Connect with OTP-authenticated URL
-      console.log("[AccountContext] Connecting with OTP URL...")
-      await api.connectWithOTP(otpResponse.data.url)
-      console.log("[AccountContext] Connected with OTP!")
-      
-      // Step 4: Extract balance from accounts response (REST API)
-      // The accounts response should contain balance information
-      console.log("[AccountContext] Extracting balance from accounts response...")
-      const accountBalance = account.balance || 0
-      const accountCurrency = account.currency || "USD"
-      console.log("[AccountContext] Balance from accounts:", accountBalance, accountCurrency)
+      const accountBalance = authResponse.balance || 0
+      const accountCurrency = authResponse.currency || "USD"
+      const accountId = authResponse.loginid
       
       // Update state with connected account info
       setAccountInfo((prev) => ({
