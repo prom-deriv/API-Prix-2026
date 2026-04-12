@@ -38,7 +38,7 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
       const clientId = import.meta.env.VITE_DERIV_OAUTH_CLIENT_ID
       const redirectUri = window.location.origin
 
-      console.log("[AccountSwitcher] Exchanging code for token via Netlify Function...")
+      console.log("[AccountSwitcher] Exchanging code for token via Serverless Function...")
       console.log("[AccountSwitcher] Client ID:", clientId)
       console.log("[AccountSwitcher] Redirect URI:", redirectUri)
 
@@ -46,8 +46,11 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
         throw new Error("OAuth client ID not configured. Please check VITE_DERIV_OAUTH_CLIENT_ID environment variable.")
       }
 
-      // Exchange code for token using Netlify Function (bypasses CORS)
-      const response = await fetch('/.netlify/functions/exchange-token', {
+      // Exchange code for token using Serverless Function (bypasses CORS)
+      const isVercel = window.location.hostname.includes('vercel.app')
+      const endpoint = isVercel ? '/api/exchange-token' : '/.netlify/functions/exchange-token'
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
