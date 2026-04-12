@@ -1749,7 +1749,6 @@ class DerivAPI {
 
       this.send({
         cashier: "deposit",
-        currency,
         req_id: reqId,
       })
 
@@ -1789,7 +1788,6 @@ class DerivAPI {
 
       this.send({
         cashier: "withdraw",
-        currency,
         req_id: reqId,
       })
 
