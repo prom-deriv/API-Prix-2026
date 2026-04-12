@@ -6,10 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import { useTradingStore } from "../../stores/tradingStore"
 import { useGhost } from "../../contexts/GhostContext"
 import { useAccount } from "../../contexts/AccountContext"
+import { getDerivAPI } from "../../lib/deriv-api"
 import { formatCurrency, formatNumber } from "../../lib/utils"
 import { calculateDurationMs, calculateTradeProgress, formatTimeRemaining } from "../../lib/ghost-engine"
 import { TrendingUp, TrendingDown, Loader2, Sparkles } from "lucide-react"
-import type { ContractType, DurationUnit } from "../../types/deriv"
+import type { ContractType, DurationUnit, TradeParams } from "../../types/deriv"
 
 const durationUnitOptions = [
   { value: "t", label: "Ticks" },
@@ -84,7 +85,7 @@ const GhostTradingPanel: React.FC<GhostTradingPanelProps> = ({ onTradeStart }) =
     }
   }, [mascotEmotion])
 
-  const executeGhostTrade = useCallback((contractType: ContractType) => {
+  const executeGhostTrade = useCallback(async (contractType: ContractType) => {
     if (!currentTick) {
       setError("No price data available")
       return
@@ -104,23 +105,76 @@ const GhostTradingPanel: React.FC<GhostTradingPanelProps> = ({ onTradeStart }) =
     setError(null)
     setIsTrading(true)
 
-    // Add ghost trade with current entry price from live ticks
-    addGhostTrade({
-      symbol: currentSymbol,
-      contractType,
-      amount: tradeAmount,
-      entryPrice: currentTick.quote,
-      duration: parseInt(duration),
-      durationUnit,
-    })
+    try {
+      if (accountType === "real") {
+        const api = getDerivAPI()
+        const isReady = await api.waitUntilReady(5000)
+        if (!isReady) throw new Error("API not ready")
 
-    // Minimize dashboard when trade starts
-    setIsExpanded(false)
+        const params: TradeParams = {
+          symbol: currentSymbol,
+          amount: tradeAmount,
+          basis: "stake",
+          contract_type: contractType,
+          duration: parseInt(duration),
+          duration_unit: durationUnit,
+          currency: "USD",
+        }
+        
+        const proposal = await api.getProposal(params)
+        const buyResult = await api.buyContract(proposal.id, proposal.ask_price)
+        
+        if (buyResult?.contract_id) {
+          const tradeId = `ghost-${buyResult.contract_id}`
+          
+          addGhostTrade({
+            id: tradeId,
+            symbol: currentSymbol,
+            contractType,
+            amount: tradeAmount,
+            entryPrice: currentTick.quote,
+            duration: parseInt(duration),
+            durationUnit,
+          })
 
-    if (onTradeStart) {
-      onTradeStart(tradeAmount)
+          api.subscribeProposalOpenContract(buyResult.contract_id, (contract) => {
+            if (contract.is_sold === 1 || contract.status === "sold") {
+              const profit = contract.profit || 0
+              settleGhostTrade(
+                tradeId,
+                contract.sell_spot || contract.current_spot || 0,
+                profit,
+                profit > 0 ? "win" : "loss"
+              )
+              setIsTrading(false)
+              setTradeProgress(0)
+              setTimeRemaining("")
+            }
+          })
+        }
+      } else {
+        // Demo local simulation
+        addGhostTrade({
+          symbol: currentSymbol,
+          contractType,
+          amount: tradeAmount,
+          entryPrice: currentTick.quote,
+          duration: parseInt(duration),
+          durationUnit,
+        })
+      }
+
+      // Minimize dashboard when trade starts
+      setIsExpanded(false)
+
+      if (onTradeStart) {
+        onTradeStart(tradeAmount)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to execute trade")
+      setIsTrading(false)
     }
-  }, [currentTick, amount, duration, durationUnit, currentSymbol, addGhostTrade, balance, accountType, onTradeStart])
+  }, [currentTick, amount, duration, durationUnit, currentSymbol, addGhostTrade, balance, accountType, onTradeStart, settleGhostTrade])
 
   const isDisabled = isTrading || !currentTick || !!activeGhostTrade
 

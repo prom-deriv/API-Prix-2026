@@ -45,8 +45,8 @@ interface SurfState {
 }
 
 interface SurfContextType extends SurfState {
-  startSession: (symbol: string, startPrice: number, stake?: number) => string
-  endSession: (sessionId: string, endPrice: number, status: "wiped" | "finished") => void
+  startSession: (symbol: string, startPrice: number, stake?: number, options?: { contractId?: string, prediction?: "UP" | "DOWN", targetDuration?: number }) => string
+  endSession: (sessionId: string, endPrice: number, status: "wiped" | "finished", profitLoss?: number) => void
   updateScore: (points: number) => void
   addCombo: () => void
   resetCombo: () => void
@@ -119,8 +119,8 @@ export function SurfProvider({ children }: { children: React.ReactNode }) {
     saveToStorage(state)
   }, [state])
 
-  const startSession = useCallback((symbol: string, startPrice: number, stake: number = 0): string => {
-    const id = `surf-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+  const startSession = useCallback((symbol: string, startPrice: number, stake: number = 0, options?: { contractId?: string, prediction?: "UP" | "DOWN", targetDuration?: number }): string => {
+    const id = options?.contractId ? `surf-${options.contractId}` : `surf-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
     const newSession: SurfSession = {
       id,
       timestamp: Date.now(),
@@ -134,6 +134,9 @@ export function SurfProvider({ children }: { children: React.ReactNode }) {
       tricksPerformed: 0,
       status: "riding",
       stake,
+      contractId: options?.contractId,
+      prediction: options?.prediction,
+      targetDuration: options?.targetDuration,
     }
 
     setState(prev => ({
@@ -148,7 +151,7 @@ export function SurfProvider({ children }: { children: React.ReactNode }) {
     return id
   }, [])
 
-  const endSession = useCallback((sessionId: string, endPrice: number, status: "wiped" | "finished") => {
+  const endSession = useCallback((sessionId: string, endPrice: number, status: "wiped" | "finished", profitLoss?: number) => {
     setState(prev => {
       if (!prev.currentSession || prev.currentSession.id !== sessionId) return prev
 
@@ -160,6 +163,7 @@ export function SurfProvider({ children }: { children: React.ReactNode }) {
         score: prev.currentScore,
         maxCombo: prev.maxCombo,
         status,
+        profitLoss,
       }
 
       const newBestRide = Math.max(prev.bestRide, prev.currentScore)

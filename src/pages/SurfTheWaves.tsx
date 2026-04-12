@@ -468,25 +468,86 @@ function SurfTheWavesContent() {
     }
   }
 
-  const handleConfirmSetup = (setup: TradingSetup) => {
+  const handleConfirmSetup = async (setup: TradingSetup) => {
     setActiveSetup(setup)
-    deductBalance(setup.stake)
     
     if (tickHistory.length > 0) {
       const startPrice = tickHistory[tickHistory.length - 1].quote
-      startSession(currentSymbol, startPrice, setup.stake)
-      setSurferState("riding")
-      sessionDurationRef.current = 0
-      setSessionDuration(0)
       
-      // Play session start sound
-      const soundMgr = getSoundManager()
-      soundMgr.playSessionStart()
+      try {
+        if (accountType === "real") {
+          const api = getDerivAPI()
+          const isReady = await api.waitUntilReady(5000)
+          if (!isReady) throw new Error("API not ready")
+
+          const params = {
+            symbol: currentSymbol,
+            amount: setup.stake,
+            basis: "stake" as const,
+            contract_type: setup.prediction === "UP" ? "CALL" as const : "PUT" as const,
+            duration: setup.duration,
+            duration_unit: "s" as const,
+            currency: "USD",
+          }
+          
+          const proposal = await api.getProposal(params)
+          const buyResult = await api.buyContract(proposal.id, proposal.ask_price)
+          
+          if (buyResult?.contract_id) {
+            startSession(currentSymbol, startPrice, setup.stake, {
+              contractId: buyResult.contract_id.toString(),
+              prediction: setup.prediction,
+              targetDuration: setup.duration
+            })
+            
+            api.subscribeProposalOpenContract(buyResult.contract_id, (contract) => {
+              if (contract.is_sold === 1 || contract.status === "sold") {
+                const profit = contract.profit || 0
+                endSession(
+                  `surf-${buyResult.contract_id}`,
+                  contract.sell_spot || contract.current_spot || 0,
+                  "finished",
+                  profit
+                )
+                setSurferState(profit > 0 ? "celebrate" : "wipeout")
+                const soundMgr = getSoundManager()
+                soundMgr.playSessionEnd(profit > 0)
+                setTimeout(() => {
+                  setSurferState("idle")
+                  setActiveSetup(null)
+                }, 3000)
+              }
+            })
+          }
+        } else {
+          // Demo local simulation
+          deductBalance(setup.stake)
+          startSession(currentSymbol, startPrice, setup.stake, {
+            prediction: setup.prediction,
+            targetDuration: setup.duration
+          })
+        }
+        
+        setSurferState("riding")
+        sessionDurationRef.current = 0
+        setSessionDuration(0)
+        
+        // Play session start sound
+        const soundMgr = getSoundManager()
+        soundMgr.playSessionStart()
+      } catch (err) {
+        console.error("Failed to execute real surf trade", err)
+      }
     }
   }
 
   const handleEndSession = useCallback(() => {
     if (currentSession && tickHistory.length > 0 && activeSetup) {
+      // Do not manually end real account trades, let the contract update handle it
+      if (accountType === "real" && currentSession.contractId) {
+        return
+      }
+
       const endPrice = tickHistory[tickHistory.length - 1].quote
       const startPrice = currentSession.startPrice
       
@@ -497,11 +558,13 @@ function SurfTheWavesContent() {
         isWin = endPrice < startPrice
       }
 
+      const profit = isWin ? activeSetup.stake * 0.85 : -activeSetup.stake
+
       if (isWin) {
         addBalance(activeSetup.stake * 1.85)
       }
 
-      endSession(currentSession.id, endPrice, "finished")
+      endSession(currentSession.id, endPrice, "finished", profit)
       setSurferState(isWin ? "celebrate" : "wipeout")
       
       // Play session end sound
@@ -513,7 +576,7 @@ function SurfTheWavesContent() {
         setActiveSetup(null)
       }, 3000)
     }
-  }, [currentSession, tickHistory, activeSetup, addBalance, endSession, setSurferState])
+  }, [currentSession, tickHistory, activeSetup, addBalance, endSession, setSurferState, accountType])
 
   const toggleSound = () => {
     const newSoundEnabled = !soundEnabled

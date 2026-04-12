@@ -29,8 +29,8 @@ interface GhostState {
 }
 
 interface GhostContextType extends GhostState {
-  addGhostTrade: (trade: Omit<GhostTrade, "id" | "timestamp" | "result" | "profit" | "mochiPoints" | "exitPrice">) => string
-  settleGhostTrade: (tradeId: string, exitPrice: number) => void
+  addGhostTrade: (trade: Omit<GhostTrade, "id" | "timestamp" | "result" | "profit" | "mochiPoints" | "exitPrice"> & { id?: string }) => string
+  settleGhostTrade: (tradeId: string, exitPrice: number, realProfit?: number, realResult?: "win" | "loss") => void
   setMascotEmotion: (emotion: MascotEmotion) => void
   winRate: number
   clearGhostHistory: () => void
@@ -97,9 +97,9 @@ export function GhostProvider({ children, onTradeSettle }: GhostProviderProps) {
   }, [state])
 
   const addGhostTrade = useCallback((
-    trade: Omit<GhostTrade, "id" | "timestamp" | "result" | "profit" | "mochiPoints" | "exitPrice">
+    trade: Omit<GhostTrade, "id" | "timestamp" | "result" | "profit" | "mochiPoints" | "exitPrice"> & { id?: string }
   ): string => {
-    const id = `ghost-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+    const id = trade.id || `ghost-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
     const newTrade: GhostTrade = {
       ...trade,
       id,
@@ -120,29 +120,37 @@ export function GhostProvider({ children, onTradeSettle }: GhostProviderProps) {
     return id
   }, [])
 
-  const settleGhostTrade = useCallback((tradeId: string, exitPrice: number) => {
+  const settleGhostTrade = useCallback((tradeId: string, exitPrice: number, realProfit?: number, realResult?: "win" | "loss") => {
     setState(prev => {
       const tradeIndex = prev.ghostTrades.findIndex(t => t.id === tradeId)
       if (tradeIndex === -1) return prev
 
       const trade = prev.ghostTrades[tradeIndex]
       
-      // Determine win/loss based on contract type
       let won = false
-      if (trade.contractType === "CALL") {
-        won = exitPrice > trade.entryPrice
-      } else if (trade.contractType === "PUT") {
-        won = exitPrice < trade.entryPrice
-      } else if (trade.contractType === "ONETOUCH") {
-        // Touch: wins if price moved significantly (simplified)
-        won = Math.abs(exitPrice - trade.entryPrice) > trade.entryPrice * 0.001
-      } else if (trade.contractType === "NOTOUCH") {
-        // No Touch: wins if price didn't move much
-        won = Math.abs(exitPrice - trade.entryPrice) <= trade.entryPrice * 0.001
+      let profit = 0
+      
+      if (realResult) {
+        won = realResult === "win"
+        profit = realProfit ?? (won ? trade.amount * 0.8 : -trade.amount)
+      } else {
+        // Local simulation fallback
+        if (trade.contractType === "CALL") {
+          won = exitPrice > trade.entryPrice
+        } else if (trade.contractType === "PUT") {
+          won = exitPrice < trade.entryPrice
+        } else if (trade.contractType === "ONETOUCH") {
+          // Touch: wins if price moved significantly (simplified)
+          won = Math.abs(exitPrice - trade.entryPrice) > trade.entryPrice * 0.001
+        } else if (trade.contractType === "NOTOUCH") {
+          // No Touch: wins if price didn't move much
+          won = Math.abs(exitPrice - trade.entryPrice) <= trade.entryPrice * 0.001
+        }
+
+        const payout = trade.amount * 1.8 // 80% payout
+        profit = won ? payout - trade.amount : -trade.amount
       }
 
-      const payout = trade.amount * 1.8 // 80% payout
-      const profit = won ? payout - trade.amount : -trade.amount
       const mochiPoints = won ? Math.floor(trade.amount * 10) : 0
 
       const updatedTrade: GhostTrade = {

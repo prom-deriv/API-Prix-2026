@@ -461,7 +461,11 @@ function MochiMotoContent() {
 
         {/* Ghost Trading Panel */}
         <div className="absolute bottom-4 right-4 z-40 w-96">
-          <GhostTradingPanel />
+          <GhostTradingPanel onTradeStart={(amount) => {
+            if (accountType === "demo") {
+               deductBalance(amount)
+            }
+          }} />
         </div>
       </main>
     </div>
@@ -479,9 +483,12 @@ function MochiMoto() {
 }
 
 function GhostProviderWithAccount({ children }: { children: React.ReactNode }) {
-  const { addBalance, deductBalance } = useAccount()
+  const { addBalance, deductBalance, accountType } = useAccount()
   return (
     <GhostProvider onTradeSettle={(profit) => {
+      // For real accounts, we don't manually adjust balance, Deriv does it
+      if (accountType === "real") return;
+      
       if (profit > 0) {
         addBalance(profit)
       } else if (profit < 0) {
