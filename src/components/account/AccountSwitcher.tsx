@@ -124,7 +124,7 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
           : "https://promotrades.vercel.app"
           
         authUrl.searchParams.set("redirect_uri", redirectUri)
-      authUrl.searchParams.set("scope", "trade admin")
+      authUrl.searchParams.set("scope", "trade")
       authUrl.searchParams.set("state", pkce.state)
       authUrl.searchParams.set("code_challenge", pkce.codeChallenge)
       authUrl.searchParams.set("code_challenge_method", "S256")
