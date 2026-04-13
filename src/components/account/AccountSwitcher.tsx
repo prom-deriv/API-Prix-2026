@@ -17,85 +17,24 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
 
   const isDemo = accountType === "demo"
 
-  // Check for OAuth callback on mount
+  // Check for Classic OAuth implicit callback on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const code = params.get("code")
-    const state = params.get("state")
-    const storedState = sessionStorage.getItem("oauth_state")
-    const storedVerifier = sessionStorage.getItem("oauth_code_verifier")
-
-    if (code && state === storedState && storedVerifier) {
-      handleOAuthCallback(code, storedVerifier)
-      // Clean up URL
+    const token1 = params.get("token1")
+    
+    if (token1) {
+      console.log("[AccountSwitcher] Received classic OAuth token in URL")
+      handleClassicOAuthCallback(token1)
+      // Clean up URL to remove sensitive tokens
       window.history.replaceState({}, document.title, window.location.pathname)
     }
   }, [])
 
-  const handleOAuthCallback = useCallback(async (code: string, codeVerifier: string) => {
+  const handleClassicOAuthCallback = useCallback(async (token: string) => {
     try {
       setError(null)
-      const clientId = import.meta.env.VITE_DERIV_OAUTH_CLIENT_ID
-      const redirectUri = window.location.origin
-
-      console.log("[AccountSwitcher] Exchanging code for token via Serverless Function...")
-      console.log("[AccountSwitcher] Client ID:", clientId)
-      console.log("[AccountSwitcher] Redirect URI:", redirectUri)
-
-      if (!clientId) {
-        throw new Error("OAuth client ID not configured. Please check VITE_DERIV_OAUTH_CLIENT_ID environment variable.")
-      }
-
-      // Exchange code for token using Serverless Function (bypasses CORS)
-      const isVercel = window.location.hostname.includes('vercel.app')
-      const endpoint = isVercel ? '/api/exchange-token' : '/.netlify/functions/exchange-token'
-      
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code,
-          codeVerifier,
-          clientId,
-          redirectUri,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error_description || errorData.error || `HTTP ${response.status}`)
-      }
-
-      const tokenResponse = await response.json()
-      console.log("[AccountSwitcher] Token exchange successful:", tokenResponse)
-      
-      // Connect with the access token (with retry logic)
-      // The OAuth endpoint returns token1, token2, etc. depending on accounts linked
-      // token1 is typically the primary access token
-      // Deriv OAuth typically returns the token object with keys like token1, account1, etc.
-      // or occasionally access_token
-      let accessToken = null;
-      if (typeof tokenResponse === 'object' && tokenResponse !== null) {
-        if (tokenResponse.access_token) {
-          accessToken = tokenResponse.access_token;
-        } else if (tokenResponse.token1) {
-          accessToken = tokenResponse.token1;
-        } else {
-          // Look for any value that looks like a token string
-          accessToken = Object.values(tokenResponse).find(v => typeof v === 'string' && v.length > 20);
-        }
-      }
-
-      console.log("[AccountSwitcher] Resolved token type:", typeof accessToken);
-      
-      if (!accessToken || typeof accessToken !== 'string') {
-        console.error("[AccountSwitcher] Failed to resolve string token from response:", tokenResponse);
-        throw new Error("Invalid token response: No access token found or token is not a string");
-      }
-      
-      await connectReal(accessToken)
+      console.log("[AccountSwitcher] Connecting with classic OAuth token...")
+      await connectReal(token)
     } catch (error) {
       console.error("[AccountSwitcher] OAuth callback failed:", error)
       const errorMessage = error instanceof Error ? error.message : "OAuth authentication failed"
@@ -111,39 +50,23 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
     }
   }, [connectReal])
 
-  const handleConnectReal = useCallback(async () => {
-    try {
-      setError(null)
-      
-      // Start OAuth flow
-      const api = getDerivAPI()
-      const clientId = import.meta.env.VITE_DERIV_OAUTH_CLIENT_ID
-      const redirectUri = window.location.origin
+  const handleConnectReal = useCallback(() => {
+    setError(null)
+    const appId = import.meta.env.VITE_DERIV_APP_ID
 
-      console.log("[AccountSwitcher] Starting OAuth flow...")
-      console.log("[AccountSwitcher] Client ID:", clientId)
-      console.log("[AccountSwitcher] Redirect URI:", redirectUri)
+    console.log("[AccountSwitcher] Starting Classic OAuth flow...")
+    console.log("[AccountSwitcher] App ID:", appId)
 
-      if (!clientId) {
-        throw new Error("OAuth client ID not configured. Please check VITE_DERIV_OAUTH_CLIENT_ID environment variable.")
-      }
-
-      // generateOAuthUrl is now async and includes code_challenge in the URL
-      // Use prompt="login" to force the login page to appear even if user has active session
-      const { url, codeVerifier, state } = await api.generateOAuthUrl(clientId, redirectUri, "trade", "login")
-
-      console.log("[AccountSwitcher] OAuth URL generated, redirecting...")
-
-      // Store state and verifier for callback verification
-      sessionStorage.setItem("oauth_state", state)
-      sessionStorage.setItem("oauth_code_verifier", codeVerifier)
-
-      // Redirect to Deriv OAuth (code_challenge is already in the URL)
-      window.location.href = url
-    } catch (error) {
-      console.error("[AccountSwitcher] Failed to start OAuth flow:", error)
-      setError(error instanceof Error ? error.message : "Failed to start authentication")
+    if (!appId) {
+      setError("OAuth App ID not configured. Please check VITE_DERIV_APP_ID environment variable.")
+      return
     }
+
+    // Use Classic OAuth Implicit Flow
+    const oauthUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&l=en&brand=deriv`
+    
+    console.log("[AccountSwitcher] Redirecting to:", oauthUrl)
+    window.location.href = oauthUrl
   }, [])
 
   return (

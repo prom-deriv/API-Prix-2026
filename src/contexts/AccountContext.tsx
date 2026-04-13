@@ -149,10 +149,6 @@ export function AccountProvider({ children }: AccountProviderProps) {
         // Ensure token is strictly a string before passing to authorize
         const tokenString = String(accessToken).trim()
         const authResponse = await api.authorize(tokenString)
-        console.log("[AccountContext] 🔍 Raw auth response:", JSON.stringify(authResponse, null, 2))
-        
-        // 🐛 DEBUG: Log all possible balance locations
-        console.log("[AccountContext] 🔍 Balance debugging:", {
           "authResponse.balance": authResponse.balance,
           "typeof balance": typeof authResponse.balance,
           "authResponse.currency": authResponse.currency,
