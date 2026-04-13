@@ -582,6 +582,7 @@ class DerivAPI {
       return
     }
 
+    console.log(`[DerivAPI] 🚀 SENDING:`, JSON.stringify(message))
     this.ws.send(JSON.stringify(message))
   }
 
@@ -1014,35 +1015,17 @@ class DerivAPI {
     }
 
     return new Promise((resolve, reject) => {
-      let resolved = false
+      this.pendingRequests.set(reqId, {
+        resolve: (data: any) => {
+          if (data.proposal) {
+            resolve(data.proposal)
+          } else {
+            reject(new Error("Failed to get proposal"))
+          }
+        },
+        reject,
+      })
 
-      // Listen for proposal event that matches our req_id
-      const handler = (data: any) => {
-        // Only process responses for our specific request
-        if (data.echo_req?.req_id !== reqId) return
-        if (resolved) return
-
-        console.log("[DerivAPI] Received proposal response:", data)
-        if (data.proposal) {
-          resolved = true
-          this.off("proposal", handler)
-          clearTimeout(timeout)
-          resolve(data.proposal)
-        } else if (data.error) {
-          resolved = true
-          this.off("proposal", handler)
-          clearTimeout(timeout)
-          reject(new Error(data.error.message || "Failed to get proposal"))
-        }
-      }
-
-      this.on("proposal", handler)
-
-      // Use 'symbol' parameter (not 'underlying')
-      // Deriv API expects "symbol" as the property name for the asset in the proposal request
-      // Make sure we use the correct parameter for the API call
-      // "symbol" is correctly defined in the official API docs
-      // Clean up the request by removing symbol if it exists as an object
       const request = {
         proposal: 1,
         amount: params.amount,
@@ -1060,10 +1043,9 @@ class DerivAPI {
       this.send(request)
 
       // Timeout after 15 seconds
-      const timeout = setTimeout(() => {
-        if (!resolved) {
-          resolved = true
-          this.off("proposal", handler)
+      setTimeout(() => {
+        if (this.pendingRequests.has(reqId)) {
+          this.pendingRequests.delete(reqId)
           reject(new Error("Request timeout - no proposal response received"))
         }
       }, 15000)
