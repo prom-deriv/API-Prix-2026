@@ -54,9 +54,7 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
       }
       
       const clientId = "32VnV8czGxufJh1E0GQUD"
-      const redirectUri = window.location.hostname === "localhost" 
-        ? "http://localhost:5173/" 
-        : "https://promotrade.netlify.app/"
+      const redirectUri = window.location.origin
         
       const { exchangeCodeForToken, storeTokens } = await import("../../lib/auth")
       
@@ -102,27 +100,26 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
 
   const handleConnectReal = useCallback(async () => {
     setError(null)
-    const clientId = "32VnV8czGxufJh1E0GQUD" // V2 OAuth Client ID
+      const clientId = "32VnV8czGxufJh1E0GQUD" // V2 OAuth Client ID
 
-    console.log("[AccountSwitcher] Starting V2 PKCE OAuth flow...")
-    
-    try {
-      const { generatePKCEChallenge } = await import("../../lib/auth")
-      const pkce = await generatePKCEChallenge()
+      console.log("[AccountSwitcher] Starting V2 PKCE OAuth flow...")
       
-      sessionStorage.setItem("pkce_code_verifier", pkce.codeVerifier)
-      sessionStorage.setItem("oauth_state", pkce.state)
-
-      const authUrl = new URL("https://auth.deriv.com/oauth2/auth")
-      authUrl.searchParams.set("response_type", "code")
-      authUrl.searchParams.set("client_id", clientId)
-      
-      // Determine redirect URI based on environment
-      const redirectUri = window.location.hostname === "localhost" 
-        ? "http://localhost:5173/" 
-        : "https://promotrade.netlify.app/"
+      try {
+        const { generatePKCEChallenge } = await import("../../lib/auth")
+        const pkce = await generatePKCEChallenge()
         
-      authUrl.searchParams.set("redirect_uri", redirectUri)
+        sessionStorage.setItem("pkce_code_verifier", pkce.codeVerifier)
+        sessionStorage.setItem("oauth_state", pkce.state)
+
+        const authUrl = new URL("https://auth.deriv.com/oauth2/auth")
+        authUrl.searchParams.set("response_type", "code")
+        authUrl.searchParams.set("client_id", clientId)
+        
+        // Use origin to automatically match Netlify or Vercel (e.g., "https://promotrade.netlify.app")
+        // NOTE: Ensure localhost:5173 is added to the dashboard for local development!
+        const redirectUri = window.location.origin
+          
+        authUrl.searchParams.set("redirect_uri", redirectUri)
       authUrl.searchParams.set("scope", "trade account_management")
       authUrl.searchParams.set("state", pkce.state)
       authUrl.searchParams.set("code_challenge", pkce.codeChallenge)
