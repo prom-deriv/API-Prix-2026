@@ -149,6 +149,8 @@ export function AccountProvider({ children }: AccountProviderProps) {
         // Ensure token is strictly a string before passing to authorize
         const tokenString = String(accessToken).trim()
         const authResponse = await api.authorize(tokenString)
+        
+        console.log("[AccountContext] Raw authorize response:", {
           "authResponse.balance": authResponse.balance,
           "typeof balance": typeof authResponse.balance,
           "authResponse.currency": authResponse.currency,
@@ -156,7 +158,7 @@ export function AccountProvider({ children }: AccountProviderProps) {
           "authResponse.login_id": authResponse.login_id,
           "Full response keys": Object.keys(authResponse)
         })
-        
+
         // Extract account details from response (Deriv API format)
         // The balance should be a number from the authorize response
         const accountBalance = typeof authResponse.balance === 'number' ? authResponse.balance : 0

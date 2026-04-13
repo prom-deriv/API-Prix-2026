@@ -5,7 +5,6 @@ import { useAccount } from "../../contexts/AccountContext"
 import { Wallet, LogOut, User, ShieldCheck, Loader2, RotateCcw } from "lucide-react"
 import { formatCurrency } from "../../lib/utils"
 import { cn } from "../../lib/utils"
-import { getDerivAPI } from "../../lib/deriv-api"
 
 interface AccountSwitcherProps {
   className?: string
