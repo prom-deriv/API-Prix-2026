@@ -1968,6 +1968,12 @@ class DerivAPI {
     this.stopPingInterval()
 
     if (this.ws) {
+      // Clear all event handlers to prevent old callbacks from firing on a dying connection
+      this.ws.onclose = null
+      this.ws.onerror = null
+      this.ws.onmessage = null
+      this.ws.onopen = null
+      
       // Only close if not in CONNECTING state (readyState 0)
       // Closing a CONNECTING WebSocket causes "WebSocket is closed before the connection is established" error
       if (this.ws.readyState !== WebSocket.CONNECTING) {
