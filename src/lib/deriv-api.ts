@@ -28,7 +28,8 @@ import type {
 
 // Deriv API WebSocket endpoint
 // Uses standard websocket endpoint to get ALL active symbols (forex, commodities, indices, crypto, etc.)
-const WS_PUBLIC_URL = "wss://ws.binaryws.com/websockets/v3?app_id=1089"
+const APP_ID = import.meta.env.VITE_DERIV_APP_ID || "1089"
+const WS_PUBLIC_URL = `wss://ws.binaryws.com/websockets/v3?app_id=${APP_ID}`
 
 type MessageHandler = (data: DerivMessage) => void
 
