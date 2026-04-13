@@ -244,16 +244,13 @@ class DerivAPI {
           this.reconnectAttempts = 0
           this.lastPong = Date.now()
 
-          // If we have a stored auth token, automatically re-authenticate
-          if (this.authToken) {
-            console.log("[DerivAPI] Auto-authenticating with stored token...")
-            this.send({ authorize: this.authToken, req_id: this.getNextReqId() })
-          } else {
-            // New Deriv API public endpoint doesn't require authorize message
-            // Mark as authorized immediately for public data access
-            this.isAuthorized = true
-            this.flushRequestQueue()
-          }
+          // Don't auto-authenticate here - let the caller handle authorization
+          // This prevents duplicate authorize calls
+          console.log("[DerivAPI] WebSocket ready, waiting for explicit authorize() call...")
+          
+          // Mark as authorized for public data access (will be set to true after authorize)
+          this.isAuthorized = false
+          this.flushRequestQueue()
 
           // Emit connection event
           this.startPingInterval()

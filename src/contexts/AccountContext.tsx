@@ -130,14 +130,25 @@ export function AccountProvider({ children }: AccountProviderProps) {
         console.log(`[AccountContext] Attempt ${attempt}/${MAX_AUTH_RETRIES} - Connecting WebSocket...`)
         await api.initialize()
         
+        // Wait for WebSocket to be fully ready before sending authorize
+        console.log(`[AccountContext] Waiting for WebSocket to stabilize...`)
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
         // Step 2: Authenticate with token (now has 30-second timeout)
         console.log(`[AccountContext] Attempt ${attempt}/${MAX_AUTH_RETRIES} - Authenticating with token...`)
         const authResponse = await api.authorize(accessToken)
-        console.log("[AccountContext] Authentication successful:", authResponse)
+        console.log("[AccountContext] Raw auth response:", JSON.stringify(authResponse, null, 2))
         
-        const accountBalance = authResponse.balance || 0
+        // Extract account details from response (Deriv API format)
+        const accountBalance = typeof authResponse.balance === 'number' ? authResponse.balance : 0
         const accountCurrency = authResponse.currency || "USD"
-        const accountId = authResponse.loginid
+        const accountId = authResponse.loginid || authResponse.login_id || null
+        
+        console.log("[AccountContext] Extracted values:", {
+          balance: accountBalance,
+          currency: accountCurrency,
+          loginId: accountId
+        })
         
         // Update state with connected account info
         setAccountInfo((prev) => ({
