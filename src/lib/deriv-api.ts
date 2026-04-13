@@ -243,12 +243,11 @@ class DerivAPI {
           this.reconnectAttempts = 0
           this.lastPong = Date.now()
 
-          // Don't auto-authenticate here - let the caller handle authorization
-          // This prevents duplicate authorize calls
-          console.log("[DerivAPI] WebSocket ready, waiting for explicit authorize() call...")
+          // Mark as authorized for public endpoint (market data doesn't require auth)
+          // This allows getActiveSymbols(), getTickHistory(), etc. to work immediately
+          this.isAuthorized = true
+          console.log("[DerivAPI] Public endpoint ready for market data calls")
           
-          // Mark as authorized for public data access (will be set to true after authorize)
-          this.isAuthorized = false
           this.flushRequestQueue()
 
           // Emit connection event
