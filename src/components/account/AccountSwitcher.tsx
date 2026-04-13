@@ -74,13 +74,28 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
       // Connect with the access token (with retry logic)
       // The OAuth endpoint returns token1, token2, etc. depending on accounts linked
       // token1 is typically the primary access token
-      const accessToken = tokenResponse.access_token || tokenResponse.token1 || Object.values(tokenResponse).find(v => typeof v === 'string' && v.length > 20)
+      // Deriv OAuth typically returns the token object with keys like token1, account1, etc.
+      // or occasionally access_token
+      let accessToken = null;
+      if (typeof tokenResponse === 'object' && tokenResponse !== null) {
+        if (tokenResponse.access_token) {
+          accessToken = tokenResponse.access_token;
+        } else if (tokenResponse.token1) {
+          accessToken = tokenResponse.token1;
+        } else {
+          // Look for any value that looks like a token string
+          accessToken = Object.values(tokenResponse).find(v => typeof v === 'string' && v.length > 20);
+        }
+      }
+
+      console.log("[AccountSwitcher] Resolved token type:", typeof accessToken);
       
-      if (!accessToken) {
-        throw new Error("Invalid token response: No access token found")
+      if (!accessToken || typeof accessToken !== 'string') {
+        console.error("[AccountSwitcher] Failed to resolve string token from response:", tokenResponse);
+        throw new Error("Invalid token response: No access token found or token is not a string");
       }
       
-      await connectReal(accessToken as string)
+      await connectReal(accessToken)
     } catch (error) {
       console.error("[AccountSwitcher] OAuth callback failed:", error)
       const errorMessage = error instanceof Error ? error.message : "OAuth authentication failed"

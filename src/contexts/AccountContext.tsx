@@ -144,7 +144,11 @@ export function AccountProvider({ children }: AccountProviderProps) {
         
         // Step 2: Authenticate with token (now has 30-second timeout)
         console.log(`[AccountContext] Attempt ${attempt}/${MAX_AUTH_RETRIES} - Authenticating with token...`)
-        const authResponse = await api.authorize(accessToken)
+        console.log(`[AccountContext] Token type being passed to API:`, typeof accessToken)
+        
+        // Ensure token is strictly a string before passing to authorize
+        const tokenString = String(accessToken).trim()
+        const authResponse = await api.authorize(tokenString)
         console.log("[AccountContext] 🔍 Raw auth response:", JSON.stringify(authResponse, null, 2))
         
         // 🐛 DEBUG: Log all possible balance locations
