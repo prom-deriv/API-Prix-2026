@@ -54,7 +54,9 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
       }
       
       const clientId = "32VnV8czGxufJh1E0GQUD"
-      const redirectUri = window.location.origin
+      const redirectUri = window.location.hostname === "localhost"
+        ? "http://localhost:5173"
+        : "https://promotrades.vercel.app"
         
       const { exchangeCodeForToken, storeTokens } = await import("../../lib/auth")
       
@@ -115,9 +117,11 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
         authUrl.searchParams.set("response_type", "code")
         authUrl.searchParams.set("client_id", clientId)
         
-        // Use origin to automatically match Netlify or Vercel (e.g., "https://promotrade.netlify.app")
+        // Explicitly use Vercel URL as default for production
         // NOTE: Ensure localhost:5173 is added to the dashboard for local development!
-        const redirectUri = window.location.origin
+        const redirectUri = window.location.hostname === "localhost"
+          ? "http://localhost:5173"
+          : "https://promotrades.vercel.app"
           
         authUrl.searchParams.set("redirect_uri", redirectUri)
       authUrl.searchParams.set("scope", "trade account_management")
