@@ -16,60 +16,26 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
 
   const isDemo = accountType === "demo"
 
-  // Check for PKCE OAuth callback on mount
+  // Check for Classic OAuth callback on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const code = params.get("code")
+    const token1 = params.get("token1")
     
-    if (code) {
-      console.log("[AccountSwitcher] Received OAuth code, exchanging for token...")
-      handleOAuthCallback(code)
-      // Clean up URL to remove code
+    if (token1) {
+      console.log("[AccountSwitcher] Received OAuth token, processing...")
+      handleOAuthCallback(token1)
+      // Clean up URL to remove token
       window.history.replaceState({}, document.title, window.location.pathname)
     }
   }, [])
 
-  const handleOAuthCallback = useCallback(async (code: string) => {
+  const handleOAuthCallback = useCallback(async (token: string) => {
     try {
       setError(null)
       console.log("[AccountSwitcher] Processing OAuth callback...")
       
-      const codeVerifier = localStorage.getItem("deriv_code_verifier")
-      if (!codeVerifier) {
-        throw new Error("Missing code verifier. Please try connecting again.")
-      }
-
-      const redirectUri = window.location.origin
-      const clientId = import.meta.env.VITE_DERIV_APP_ID
-
-      const response = await fetch("/api/exchange-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code,
-          codeVerifier,
-          clientId,
-          redirectUri,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || "Failed to exchange token")
-      }
-
-      const data = await response.json()
-      console.log("[AccountSwitcher] Token exchange successful, passing access_token to connectReal:", data.access_token ? "Found" : "Missing")
+      await connectReal(token)
       
-      // Only pass the access_token string to connectReal!
-      if (!data.access_token) {
-        throw new Error("Invalid token response from server")
-      }
-      
-      await connectReal(data.access_token)
-      
-      // Cleanup
-      localStorage.removeItem("deriv_code_verifier")
     } catch (error) {
       console.error("[AccountSwitcher] OAuth callback failed:", error)
       const errorMessage = error instanceof Error ? error.message : "OAuth authentication failed"
@@ -89,18 +55,17 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
         throw new Error("OAuth App ID not configured")
       }
 
-      // Generate PKCE challenge
-      const { generatePKCEChallenge, getAuthorizationUrl } = await import("../../lib/auth")
-      const pkce = await generatePKCEChallenge()
-      
-      // Store verifier for later
-      localStorage.setItem("deriv_code_verifier", pkce.codeVerifier)
-
       const redirectUri = window.location.origin
-      const oauthUrl = getAuthorizationUrl({
-        clientId: appId,
-        redirectUri,
-      }, pkce)
+
+      // Use classic OAuth implicit flow for Web-based app
+      const params = new URLSearchParams({
+        app_id: appId,
+        l: "EN",
+        brand: "deriv",
+        redirect_uri: redirectUri
+      })
+
+      const oauthUrl = `https://oauth.deriv.com/oauth2/authorize?${params.toString()}`
       
       console.log("[AccountSwitcher] Redirecting to:", oauthUrl)
       window.location.href = oauthUrl
