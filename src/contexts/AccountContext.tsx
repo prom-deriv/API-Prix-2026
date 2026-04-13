@@ -119,10 +119,11 @@ export function AccountProvider({ children }: AccountProviderProps) {
       isConnecting: true,
     }))
 
-    if (!accessToken) {
-      console.error("[AccountContext] Cannot connect real account: No access token provided")
+    if (!accessToken || accessToken === "undefined" || accessToken === "null") {
+      console.error("[AccountContext] Cannot connect real account: No valid access token provided")
+      localStorage.removeItem("deriv_access_token")
       isAuthenticatingRef.current = false
-      setAccountInfo(prev => ({ ...prev, isConnecting: false }))
+      setAccountInfo(prev => ({ ...prev, isConnecting: false, accountType: "demo", accessToken: null }))
       return
     }
 
@@ -258,10 +259,10 @@ export function AccountProvider({ children }: AccountProviderProps) {
       // Set up authorize response handler
       authorizeHandlerRef.current = api.on("authorize", handleAuthorize)
 
-      // Auto-reconnect if we have a token but aren't connected
+      // Auto-reconnect if we have a valid token but aren't connected
       const storedToken = localStorage.getItem("deriv_access_token")
-      if (storedToken && !accountInfo.isConnected && !accountInfo.isConnecting) {
-        console.log("[AccountContext] Found stored token, auto-reconnecting...")
+      if (storedToken && storedToken !== "undefined" && storedToken !== "null" && !accountInfo.isConnected && !accountInfo.isConnecting) {
+        console.log("[AccountContext] Found valid stored token, auto-reconnecting...")
         connectReal(storedToken).catch(err => {
           console.error("[AccountContext] Auto-reconnect failed, falling back to demo:", err)
           disconnect()
