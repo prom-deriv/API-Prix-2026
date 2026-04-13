@@ -45,17 +45,20 @@ export function generatePKCEChallenge(): PKCEChallenge {
 }
 
 export function getAuthorizationUrl(config: OAuthConfig, pkce: PKCEChallenge): string {
-  const params = new URLSearchParams({
+  const params: Record<string, string> = {
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
     response_type: "code",
-    scope: config.scope || "read trade payments",
     code_challenge: pkce.codeChallenge,
     code_challenge_method: "S256",
     state: pkce.state,
-  })
+  }
 
-  return `${AUTH_ENDPOINT}?${params.toString()}`
+  if (config.scope) {
+    params.scope = config.scope
+  }
+
+  return `${AUTH_ENDPOINT}?${new URLSearchParams(params).toString()}`
 }
 
 export async function exchangeCodeForToken(
