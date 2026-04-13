@@ -330,7 +330,7 @@ function Home() {
 
     // Listen for account connection changes to force re-subscribe
     useEffect(() => {
-      const handleAccountConnected = async (e: Event) => {
+      const handleAccountConnected = async () => {
         console.log("[Home] Account connected event received, re-subscribing...")
         if (currentSymbol) {
           // Force complete cleanup
