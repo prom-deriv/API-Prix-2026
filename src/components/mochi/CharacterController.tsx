@@ -40,61 +40,6 @@ const getCharacterImage = (isLead: boolean, emotion: MascotEmotion) => {
   }
 }
 
-// SVG Placeholder for Bubu (Panda)
-const BubuPlaceholder = () => (
-  <svg viewBox="0 0 100 100" className="w-full h-full">
-    <circle cx="50" cy="50" r="45" fill="#F5F5F5" />
-    {/* Ears */}
-    <circle cx="25" cy="25" r="15" fill="#333" />
-    <circle cx="75" cy="25" r="15" fill="#333" />
-    {/* Face */}
-    <circle cx="50" cy="55" r="35" fill="#FFFFFF" />
-    {/* Eyes */}
-    <ellipse cx="35" cy="45" rx="8" ry="10" fill="#333" />
-    <ellipse cx="65" cy="45" rx="8" ry="10" fill="#333" />
-    <circle cx="37" cy="43" r="3" fill="#FFF" />
-    <circle cx="67" cy="43" r="3" fill="#FFF" />
-    {/* Nose */}
-    <ellipse cx="50" cy="60" rx="8" ry="5" fill="#333" />
-    {/* Mouth */}
-    <path d="M 42 68 Q 50 75 58 68" stroke="#333" strokeWidth="2" fill="none" />
-    {/* Blush */}
-    <circle cx="30" cy="60" r="6" fill="#FFB6C1" opacity="0.5" />
-    <circle cx="70" cy="60" r="6" fill="#FFB6C1" opacity="0.5" />
-  </svg>
-)
-
-// SVG Placeholder for Dudu (Bunny)
-const DuduPlaceholder = () => (
-  <svg viewBox="0 0 100 100" className="w-full h-full">
-    <circle cx="50" cy="55" r="40" fill="#FFF0F5" />
-    {/* Ears */}
-    <ellipse cx="35" cy="15" rx="10" ry="25" fill="#FFFFFF" />
-    <ellipse cx="65" cy="15" rx="10" ry="25" fill="#FFFFFF" />
-    <ellipse cx="35" cy="15" rx="6" ry="18" fill="#FFB6C1" />
-    <ellipse cx="65" cy="15" rx="6" ry="18" fill="#FFB6C1" />
-    {/* Face */}
-    <circle cx="50" cy="55" r="35" fill="#FFFFFF" />
-    {/* Eyes */}
-    <circle cx="38" cy="48" r="6" fill="#333" />
-    <circle cx="62" cy="48" r="6" fill="#333" />
-    <circle cx="40" cy="46" r="2" fill="#FFF" />
-    <circle cx="64" cy="46" r="2" fill="#FFF" />
-    {/* Nose */}
-    <ellipse cx="50" cy="58" rx="5" ry="4" fill="#FFB6C1" />
-    {/* Mouth */}
-    <path d="M 45 65 Q 50 70 55 65" stroke="#333" strokeWidth="2" fill="none" />
-    {/* Whiskers */}
-    <line x1="30" y1="55" x2="40" y2="58" stroke="#CCC" strokeWidth="1" />
-    <line x1="30" y1="60" x2="40" y2="60" stroke="#CCC" strokeWidth="1" />
-    <line x1="60" y1="58" x2="70" y2="55" stroke="#CCC" strokeWidth="1" />
-    <line x1="60" y1="60" x2="70" y2="60" stroke="#CCC" strokeWidth="1" />
-    {/* Blush */}
-    <circle cx="32" cy="62" r="5" fill="#FFB6C1" opacity="0.4" />
-    <circle cx="68" cy="62" r="5" fill="#FFB6C1" opacity="0.4" />
-  </svg>
-)
-
 // New SVG Characters
 const MochiRacer: React.FC<{ emotion: MascotEmotion, raceState: string }> = ({ emotion }) => (
   <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-xl">
