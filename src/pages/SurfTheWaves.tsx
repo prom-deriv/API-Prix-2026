@@ -760,9 +760,9 @@ function SurfTheWavesContent() {
         </ErrorBoundary>
 
         {/* Live Market Price - Bottom Middle */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40">
-          <div className="bg-[#4A6B82] border-2 border-[#1E293B] px-8 py-3 rounded-[20px] shadow-2xl flex flex-col items-start gap-1 min-w-[240px]">
-            <span className="font-bold text-white text-3xl tabular-nums tracking-wide">
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-40">
+          <div className="bg-[#4A6B82] border-2 border-[#1E293B] px-6 py-2 rounded-[20px] shadow-2xl flex flex-col items-start gap-1 min-w-[180px]">
+            <span className="font-bold text-white text-2xl tabular-nums tracking-wide">
               {currentTick?.quote ? currentTick.quote.toFixed(5) : (lastTick?.quote ? lastTick.quote.toFixed(5) : "Loading...")}
             </span>
             {(currentTick?.quote || lastTick?.quote) && secondLastTick?.quote && (
