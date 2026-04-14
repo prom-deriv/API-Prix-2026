@@ -869,6 +869,23 @@ AFTER (Clean):
   })
   ```
 
+### Mochi Moto Character Track Alignment (April 14, 2026)
+
+**Problem:** The Mochi Moto characters were floating above or sinking below the procedural race track. Their vertical position did not accurately match the curve of the road beneath them, breaking the illusion that they were driving on the track.
+
+**Solution: Mathematical Fix & CSS Translation Refinement**
+
+1. **Fixed `getRoadYAtX` Calculation** (`ProceduralTrack.tsx`):
+   - The original math mapped the screen X coordinate to the track's internal normalized X coordinate incorrectly, causing a horizontal offset mismatch.
+   - Fixed the calculation to precisely map the screen pixel back to the original Catmull-Rom curve by adding the `scrollShift` properly: `((x + scrollShift) % width + width) % width`.
+   - Characters now query the exact Y position of the curve directly beneath them.
+
+2. **Refined CSS Translation** (`CharacterController.tsx`):
+   - Removed arbitrary pixel offsets (`top: mochiY - 20`).
+   - Aligned `top` exactly to the road's Y coordinate (`mochiY`).
+   - Applied a `-85%` vertical CSS translation (`translateY(-85%)`) to perfectly flush the bottom of the character's bounding box (the wheels) with the top surface of the road.
+   - This matches the robust positioning method successfully used in the `SurferCharacter` component.
+
 ### Ambient Waves Sound Enhancement (April 14, 2026)
 
 **Problem:** The ambient ocean wave sound in the "Surf the Market Waves" game was too quiet, making the experience less immersive. The browser's autoplay policy also required user interaction before playing audio, which wasn't clearly tied to obvious game actions.

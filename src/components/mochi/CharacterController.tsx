@@ -13,7 +13,7 @@ interface CharacterControllerProps {
   raceState: "idle" | "revving" | "racing" | "finished"
   priceChange: number
   tickHistory: Array<{ quote: number; epoch: number }>
-  roadY: number
+  getRoadY: ((x: number) => number) | null
 }
 
 // Character sprite URLs using local images
@@ -278,7 +278,7 @@ const CharacterController: React.FC<CharacterControllerProps> = ({
   raceState,
   priceChange,
   tickHistory,
-  roadY,
+  getRoadY,
 }) => {
   // Jump physics state
   const [isJumping, setIsJumping] = useState(false)
@@ -414,32 +414,46 @@ const CharacterController: React.FC<CharacterControllerProps> = ({
     return "smoke"
   }
 
+  const centerScreenX = typeof window !== 'undefined' ? window.innerWidth / 2 : 0;
+  
+  const mochiXOffset = isMochiLeading ? MOCHI_LEAD_X : MOCHI_LAG_X;
+  const motoXOffset = isMotoLeading ? MOTO_LEAD_X : MOTO_LAG_X;
+
+  const mochiX = centerScreenX + mochiXOffset;
+  const motoX = centerScreenX + motoXOffset;
+
+  const mochiY = getRoadY ? getRoadY(mochiX) : 0;
+  const motoY = getRoadY ? getRoadY(motoX) : 0;
+
   return (
     <div 
-      className="absolute left-1/2 transform -translate-x-1/2 flex items-end justify-center" 
-      style={{ 
-        width: "300px", // Give a fixed width container so we can position absolutely within it
-        top: roadY > 0 ? `${roadY - 20}px` : "65%", // Position container's top perfectly at the road's top edge (road has 40px width, so -20px)
-        zIndex: 20,
-        transform: `translateX(-50%) translateY(calc(-100% + ${jumpY}px))`, // Shift up by 100% so the bottom rests on road top, then apply jump
-        transition: "top 0.1s ease-out", // Smoothly follow the road
-      }}
+      className="absolute inset-0 pointer-events-none" 
+      style={{ zIndex: 20 }}
     >
-      {/* Mochi (Red) */}
-      <motion.div
-        className="absolute bottom-0"
+      {/* Mochi (Green) */}
+      <div
+        className="absolute flex items-end justify-center"
         style={{
-          rotate: isMochiLeading ? rotation : rotation * 0.5,
-          transformOrigin: "center bottom",
+          width: "150px", // Approximate width
+          left: `calc(50% + ${mochiXOffset}px)`,
+          top: mochiY > 0 ? `${mochiY}px` : "65%",
+          transform: `translateX(-50%) translateY(calc(-85% + ${jumpY}px))`,
           zIndex: isMochiLeading ? 30 : 10,
+          transition: "top 0.1s ease-out",
         }}
-        animate={{
-          x: isMochiLeading ? MOCHI_LEAD_X : MOCHI_LAG_X,
-          scaleX: isMochiLeading ? squashStretch.scaleX : squashStretch.scaleX * 0.95,
-          scaleY: isMochiLeading ? squashStretch.scaleY : squashStretch.scaleY * 0.95,
-        }}
-        transition={{ type: "spring", stiffness: 300, damping: 20 }}
       >
+        <motion.div
+          className="relative w-full flex items-end justify-center"
+          style={{
+            rotate: isMochiLeading ? rotation : rotation * 0.5,
+            transformOrigin: "center bottom",
+          }}
+          animate={{
+            scaleX: isMochiLeading ? squashStretch.scaleX : squashStretch.scaleX * 0.95,
+            scaleY: isMochiLeading ? squashStretch.scaleY : squashStretch.scaleY * 0.95,
+          }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+        >
         <div
           className="relative w-36 h-36 md:w-48 md:h-48"
         >
@@ -505,24 +519,34 @@ const CharacterController: React.FC<CharacterControllerProps> = ({
             transition={{ duration: 0.3 }}
           />
         )}
-      </motion.div>
+        </motion.div>
+      </div>
 
-      {/* Moto (Blue) */}
-      <motion.div
-        className="absolute bottom-0"
+      {/* Moto (Red) */}
+      <div
+        className="absolute flex items-end justify-center"
         style={{
-          rotate: isMotoLeading ? rotation : rotation * 0.5,
-          transformOrigin: "center bottom",
+          width: "150px", // Approximate width
+          left: `calc(50% + ${motoXOffset}px)`,
+          top: motoY > 0 ? `${motoY}px` : "65%",
+          transform: `translateX(-50%) translateY(calc(-85% + ${jumpY}px))`,
           opacity: 0.9,
           zIndex: isMotoLeading ? 30 : 10,
+          transition: "top 0.1s ease-out",
         }}
-        animate={{
-          x: isMotoLeading ? MOTO_LEAD_X : MOTO_LAG_X,
-          scaleX: isMotoLeading ? squashStretch.scaleX : squashStretch.scaleX * 0.95,
-          scaleY: isMotoLeading ? squashStretch.scaleY : squashStretch.scaleY * 0.95,
-        }}
-        transition={{ type: "spring", stiffness: 300, damping: 20 }}
       >
+        <motion.div
+          className="relative w-full flex items-end justify-center"
+          style={{
+            rotate: isMotoLeading ? rotation : rotation * 0.5,
+            transformOrigin: "center bottom",
+          }}
+          animate={{
+            scaleX: isMotoLeading ? squashStretch.scaleX : squashStretch.scaleX * 0.95,
+            scaleY: isMotoLeading ? squashStretch.scaleY : squashStretch.scaleY * 0.95,
+          }}
+          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+        >
         <div
           className="relative w-36 h-36 md:w-48 md:h-48"
         >
@@ -576,26 +600,28 @@ const CharacterController: React.FC<CharacterControllerProps> = ({
             ))}
           </div>
         )}
-      </motion.div>
+        </motion.div>
+      </div>
 
       {/* Race position indicator */}
       {raceState === "racing" && (
         <motion.div
-          className="absolute -top-12 px-4 py-2 rounded-full text-sm font-bold z-50 whitespace-nowrap"
+          className="absolute px-4 py-2 rounded-full text-sm font-bold z-50 whitespace-nowrap transform -translate-x-1/2"
           style={{
+            left: `calc(50% + ${isMochiLeading ? MOCHI_LEAD_X : MOTO_LEAD_X}px)`,
+            top: isMochiLeading && mochiY > 0 ? `${mochiY - 200}px` : isMotoLeading && motoY > 0 ? `${motoY - 200}px` : "30%",
             backgroundColor: isMochiLeading ? "#DFF2D8" : "#FFE5E5",
             color: "#8B5E3C",
             border: `2px solid ${isMochiLeading ? "#7CB876" : "#FF4B4B"}`,
             fontFamily: "'Quicksand', sans-serif",
+            transition: "top 0.1s ease-out, left 0.5s ease-out",
           }}
           animate={{
             scale: [1, 1.05, 1],
-            x: isMochiLeading ? MOCHI_LEAD_X - 40 : MOTO_LEAD_X - 40,
           }}
           transition={{ 
             duration: 1, 
             repeat: Infinity,
-            x: { type: "spring", stiffness: 300, damping: 20 }
           }}
         >
           {isMochiLeading ? "📈 Mochi Leading!" : "📉 Moto Leading!"}

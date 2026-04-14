@@ -338,8 +338,11 @@ const ProceduralTrack: React.FC<ProceduralTrackProps> = ({
 
     const scrollShift = scrollOffset % dimensions.width
     // Map screen X coordinate back to the normalized track X coordinate
-    // Add dimensions.width before modulo to ensure positive result
-    const normalizedX = (x + scrollShift + dimensions.width) % dimensions.width
+    // The track is drawn at `x_draw = p.x + offset - scrollShift`
+    // So to find which `p.x` corresponds to a given screen `x`:
+    // `p.x = x - offset + scrollShift`
+    // Since the pattern repeats every `dimensions.width`, we take modulo:
+    const normalizedX = ((x + scrollShift) % dimensions.width + dimensions.width) % dimensions.width
 
     // Find the two points that bound normalizedX
     let p1 = smoothPoints[0]

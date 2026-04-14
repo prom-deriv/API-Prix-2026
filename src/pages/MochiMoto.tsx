@@ -45,7 +45,7 @@ function MochiMotoContent() {
   const [scrollOffset, setScrollOffset] = useState(0)
   const [slope, setSlope] = useState(0)
   const [speed, setSpeed] = useState(0)
-  const [roadY, setRoadY] = useState(0)
+  const [roadYUpdater, setRoadYUpdater] = useState(0) // dummy state to trigger re-renders when road moves
   const getRoadYRef = useRef<((x: number) => number) | null>(null)
   
   const stopDrivingSoundRef = useRef<(() => void) | null>(null)
@@ -228,10 +228,9 @@ function MochiMotoContent() {
       setSlope(calculateSlope(tickHistory))
       setSpeed(raceState === "racing" ? 60 : raceState === "revving" ? 0 : 20)
       
-      // Update road Y position for center of screen
+      // Update road Y position
       if (getRoadYRef.current) {
-        const centerScreenX = window.innerWidth / 2
-        setRoadY(getRoadYRef.current(centerScreenX))
+        setRoadYUpdater(prev => prev + 1)
       }
     }
 
@@ -392,7 +391,7 @@ function MochiMotoContent() {
               raceState={raceState}
               priceChange={priceChange}
               tickHistory={tickHistory}
-              roadY={roadY}
+              getRoadY={getRoadYRef.current}
             />
           </ErrorBoundary>
         </div>
