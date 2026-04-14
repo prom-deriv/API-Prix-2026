@@ -723,6 +723,7 @@ function SurfTheWavesContent() {
             state={surferState}
             tickHistory={tickHistory}
             priceChange={priceChange}
+            scrollOffset={scrollOffset}
           />
         </ErrorBoundary>
 

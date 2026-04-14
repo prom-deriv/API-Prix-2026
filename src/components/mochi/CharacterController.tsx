@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from "react"
-import { motion, useAnimationFrame, useMotionValue, useSpring } from "framer-motion"
+import { motion } from "framer-motion"
 import { Bike } from "lucide-react"
 import type { MascotEmotion } from "../../contexts/GhostContext"
 import { getSoundManager } from "../../utils/soundManager"
