@@ -83,7 +83,7 @@ export default function ActiveContractsPanel() {
           </h3>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-3 overflow-y-auto max-h-[600px] pr-2 scrollbar-thin">
           {activeContracts.map((contract) => {
             const isProfitable = contract.profit > 0
             const profitPercentage = ((contract.profit / contract.buy_price) * 100).toFixed(2)

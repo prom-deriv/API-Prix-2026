@@ -51,6 +51,10 @@ const TradingPanel: React.FC = () => {
   const [contractCategory, setContractCategory] = useState<ContractCategory>("RISE_FALL")
   const [isPositiveOffset, setIsPositiveOffset] = useState<boolean>(true)
   const [availableContractTypes, setAvailableContractTypes] = useState<Set<ContractCategory>>(new Set(["RISE_FALL", "HIGHER_LOWER", "TOUCH_NO_TOUCH"]))
+  const [isTakeProfitEnabled, setIsTakeProfitEnabled] = useState<boolean>(false)
+  const [takeProfitValue, setTakeProfitValue] = useState<string>("")
+  const [isStopLossEnabled, setIsStopLossEnabled] = useState<boolean>(false)
+  const [stopLossValue, setStopLossValue] = useState<string>("")
 
   // Derive pip size from active_symbols (primary) or tick data (fallback)
   const resolvedPipSize = useMemo(() => {
@@ -281,6 +285,13 @@ const TradingPanel: React.FC = () => {
       const startTime = Date.now()
       const expiryTime = startTime + tradeDurationMs
       
+      // Store SL/TP if enabled
+      const tp = isTakeProfitEnabled && takeProfitValue ? parseFloat(takeProfitValue) : undefined
+      const sl = isStopLossEnabled && stopLossValue ? parseFloat(stopLossValue) : undefined
+      if (tp || sl) {
+        useTradingStore.getState().setContractSLTP(demoContractId, sl, tp)
+      }
+
       // Add to active contracts immediately
       addActiveContract({
         contract_id: demoContractId,
@@ -321,6 +332,9 @@ const TradingPanel: React.FC = () => {
         purchase_time: startTime / 1000,
         transaction_ids: { buy: demoContractId },
       })
+      
+      // Resolve immediately so the user can place another trade concurrently
+      resolve()
       
       // Real-time update interval (every 500ms)
       const updateInterval = setInterval(() => {
@@ -430,7 +444,6 @@ const TradingPanel: React.FC = () => {
           })
           
           setProposal(null)
-          resolve()
         }
       }, 500) // Update every 500ms
     })
@@ -438,6 +451,17 @@ const TradingPanel: React.FC = () => {
 
   const executeTrade = useCallback(async (contractType: ContractType) => {
     setError(null)
+    
+    // Validate SL/TP
+    if (isTakeProfitEnabled && (!takeProfitValue || isNaN(parseFloat(takeProfitValue)) || parseFloat(takeProfitValue) <= 0)) {
+      setError("Please enter a valid positive amount for Take Profit.")
+      return
+    }
+    if (isStopLossEnabled && (!stopLossValue || isNaN(parseFloat(stopLossValue)) || parseFloat(stopLossValue) <= 0)) {
+      setError("Please enter a valid positive amount for Stop Loss.")
+      return
+    }
+    
     setIsTrading(true)
     try {
       if (accountType === "demo") {
@@ -492,6 +516,13 @@ const TradingPanel: React.FC = () => {
 
         // Track contract result for real accounts
         if (buyResult?.contract_id) {
+          // Store SL/TP if enabled
+          const tp = isTakeProfitEnabled && takeProfitValue ? parseFloat(takeProfitValue) : undefined
+          const sl = isStopLossEnabled && stopLossValue ? parseFloat(stopLossValue) : undefined
+          if (tp || sl) {
+            useTradingStore.getState().setContractSLTP(buyResult.contract_id, sl, tp)
+          }
+
           // Add to active contracts
           addActiveContract({
             contract_id: buyResult.contract_id,
@@ -581,6 +612,21 @@ const TradingPanel: React.FC = () => {
                 bid_price: contract.bid_price,
                 status: contract.status,
               })
+
+              // Check SL/TP
+              const sltp = useTradingStore.getState().getContractSLTP(buyResult.contract_id)
+              if (contract.bid_price !== undefined) {
+                let shouldClose = false
+                if (sltp?.stopLoss !== undefined && contract.bid_price <= sltp.stopLoss) {
+                  shouldClose = true
+                } else if (sltp?.takeProfit !== undefined && contract.bid_price >= sltp.takeProfit) {
+                  shouldClose = true
+                }
+                
+                if (shouldClose) {
+                  api.sellContract(buyResult.contract_id, contract.bid_price).catch(console.error)
+                }
+              }
             }
           })
         }
@@ -769,6 +815,75 @@ const TradingPanel: React.FC = () => {
         {error && (
           <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
         )}
+        
+        {/* SL/TP Panel */}
+        <div className="grid grid-cols-2 gap-4 pt-2">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <input 
+                type="checkbox" 
+                id="take-profit-cb"
+                className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary"
+                checked={isTakeProfitEnabled}
+                onChange={(e) => setIsTakeProfitEnabled(e.target.checked)}
+              />
+              <label htmlFor="take-profit-cb" className="text-sm font-medium cursor-pointer flex items-center gap-1">
+                Take profit
+                <div className="relative group">
+                  <span className="text-muted-foreground cursor-help text-xs ml-1 border border-muted-foreground rounded-full w-4 h-4 flex items-center justify-center">i</span>
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-popover text-popover-foreground text-xs rounded shadow-lg border z-10 text-center">
+                    Contract will close automatically if bid price reaches this level.
+                  </div>
+                </div>
+              </label>
+            </div>
+            <div className="flex relative">
+              <Input 
+                type="text" 
+                inputMode="decimal" 
+                placeholder="Amount" 
+                value={takeProfitValue}
+                onChange={(e) => { if (/^\d*\.?\d*$/.test(e.target.value)) setTakeProfitValue(e.target.value) }}
+                disabled={!isTakeProfitEnabled}
+                className="pr-12 text-center"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">USD</div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <input 
+                type="checkbox" 
+                id="stop-loss-cb"
+                className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary"
+                checked={isStopLossEnabled}
+                onChange={(e) => setIsStopLossEnabled(e.target.checked)}
+              />
+              <label htmlFor="stop-loss-cb" className="text-sm font-medium cursor-pointer flex items-center gap-1">
+                Stop loss
+                <div className="relative group">
+                  <span className="text-muted-foreground cursor-help text-xs ml-1 border border-muted-foreground rounded-full w-4 h-4 flex items-center justify-center">i</span>
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-popover text-popover-foreground text-xs rounded shadow-lg border z-10 text-center">
+                    Contract will close automatically if bid price falls to this level.
+                  </div>
+                </div>
+              </label>
+            </div>
+            <div className="flex relative">
+              <Input 
+                type="text" 
+                inputMode="decimal" 
+                placeholder="Amount" 
+                value={stopLossValue}
+                onChange={(e) => { if (/^\d*\.?\d*$/.test(e.target.value)) setStopLossValue(e.target.value) }}
+                disabled={!isStopLossEnabled}
+                className="pr-12 text-center"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">USD</div>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           {contractCategory === "RISE_FALL" && (
             <>

@@ -531,8 +531,8 @@ function Home() {
             </Card>
 
             <div className="flex flex-col gap-4">
-              <DerivPoints />
               <ActiveContractsPanel />
+              <DerivPoints />
             </div>
 
              <AlertSystem />
