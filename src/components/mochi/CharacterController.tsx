@@ -16,7 +16,7 @@ interface CharacterControllerProps {
 }
 
 // Character sprite URLs using local images
-const getCharacterImage = (isLead: boolean, emotion: MascotEmotion, raceState: string) => {
+const getCharacterImage = (isLead: boolean, emotion: MascotEmotion) => {
   if (isLead) {
     // Mochi
     switch (emotion) {
@@ -505,7 +505,7 @@ const CharacterController: React.FC<CharacterControllerProps> = ({
           className="relative w-36 h-36 md:w-48 md:h-48"
         >
           <CharacterImage
-            src={getCharacterImage(true, mochiEmotion, raceState)}
+            src={getCharacterImage(true, mochiEmotion)}
             alt="Mochi Racer"
             isLead={true}
             emotion={mochiEmotion}
@@ -592,7 +592,7 @@ const CharacterController: React.FC<CharacterControllerProps> = ({
           className="relative w-36 h-36 md:w-48 md:h-48"
         >
           <CharacterImage
-            src={getCharacterImage(false, motoEmotion, raceState)}
+            src={getCharacterImage(false, motoEmotion)}
             alt="Moto Racer"
             isLead={false}
             emotion={motoEmotion}
