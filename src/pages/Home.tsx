@@ -21,6 +21,7 @@ import { formatNumber, formatPercentage } from "../lib/utils"
 import { Wifi, WifiOff, RefreshCw, TrendingUp, TrendingDown, Gamepad2, Home as HomeIcon, Waves } from "lucide-react"
 import { Link } from "react-router-dom"
 import { ThemeToggle } from "../components/ui/ThemeToggle"
+import Watchlist from "../components/trading/Watchlist"
 
 function Home() {
   const {
@@ -487,6 +488,7 @@ function Home() {
       <main className="container mx-auto px-4 py-4 md:py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           <div className="lg:col-span-2 space-y-4">
+            <Watchlist />
             <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
               <div className="w-full sm:w-auto flex-1 max-w-sm">
                 <AssetSelector className="w-full" />
