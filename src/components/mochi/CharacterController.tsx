@@ -459,9 +459,9 @@ const CharacterController: React.FC<CharacterControllerProps> = ({
 
         {/* Character label */}
         <motion.div
-          className="absolute -top-6 left-1/2 transform -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap"
+          className="absolute -top-6 left-1/2 transform -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap flex items-center justify-center gap-1"
           style={{
-            backgroundColor: USE_ORIGINAL_CHARACTERS ? "#B5C0D0" : "#4CAF50",
+            backgroundColor: "#4CAF50",
             color: "#FFFFFF",
             fontFamily: "'Quicksand', sans-serif",
             zIndex: 40,
@@ -472,7 +472,10 @@ const CharacterController: React.FC<CharacterControllerProps> = ({
           }}
           transition={{ duration: 0.5, repeat: mochiEmotion === "win" ? Infinity : 0 }}
         >
-          Mochi {isMochiLeading ? "🏎️" : "🚗"}
+          <span>Mochi</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#004d00">
+            <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.08 3H5.78l1.07-3zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
+          </svg>
         </motion.div>
 
         {/* Speed lines when racing */}
