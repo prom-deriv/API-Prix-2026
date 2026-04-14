@@ -45,7 +45,7 @@ function MochiMotoContent() {
   const [scrollOffset, setScrollOffset] = useState(0)
   const [slope, setSlope] = useState(0)
   const [speed, setSpeed] = useState(0)
-  const [roadYUpdater, setRoadYUpdater] = useState(0) // dummy state to trigger re-renders when road moves
+  const [, setRoadYUpdater] = useState(0) // dummy state to trigger re-renders when road moves
   const getRoadYRef = useRef<((x: number) => number) | null>(null)
   
   const stopDrivingSoundRef = useRef<(() => void) | null>(null)
