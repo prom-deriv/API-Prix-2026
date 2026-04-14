@@ -434,6 +434,20 @@ function SurfTheWavesContent() {
     }
   }, [soundEnabled])
 
+  // Explicitly resume audio context when user interacts with Start button
+  useEffect(() => {
+    const handleStartClick = () => {
+      const soundMgr = getSoundManager()
+      // @ts-ignore - accessing private member for utility
+      if (soundMgr.audioContext?.state === 'suspended') {
+        // @ts-ignore
+        soundMgr.audioContext.resume()
+      }
+    }
+    window.addEventListener('click', handleStartClick)
+    return () => window.removeEventListener('click', handleStartClick)
+  }, [])
+
   // Sound effects for whoosh, and wave crashes during session
   useEffect(() => {
     if (!currentSession || !soundEnabled) {

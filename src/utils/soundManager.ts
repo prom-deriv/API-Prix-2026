@@ -75,7 +75,7 @@ class SoundManager {
       filter.Q.value = 1
 
       // Subtle volume for ambient sound
-      gain.gain.value = 0.15
+      gain.gain.value = 0.5
 
       oscillator.connect(filter)
       filter.connect(gain)

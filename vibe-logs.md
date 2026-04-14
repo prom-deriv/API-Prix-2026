@@ -866,8 +866,23 @@ AFTER (Clean):
        low: Number(ohlc.low),
        close: Number(ohlc.close),
        epoch: Number(ohlc.epoch)
-     })
-     ```
+  })
+  ```
+
+### Ambient Waves Sound Enhancement (April 14, 2026)
+
+**Problem:** The ambient ocean wave sound in the "Surf the Market Waves" game was too quiet, making the experience less immersive. The browser's autoplay policy also required user interaction before playing audio, which wasn't clearly tied to obvious game actions.
+
+**Solution: Increased Volume & Explicit Triggers**
+
+1. **Increased Base Volume** (`src/utils/soundManager.ts`):
+   - Increased the `gain.gain.value` in `playOceanAmbient()` from `0.15` to `0.5`.
+   - Makes the low-frequency rumble and wave motion noticeably louder.
+
+2. **Explicit Audio Context Resumption** (`src/pages/SurfTheWaves.tsx`):
+   - Added a specific `useEffect` hook that listens for click events on the window.
+   - When a click occurs (e.g., clicking "Start Surfing"), it explicitly checks if the Web Audio API context is `suspended`.
+   - If suspended, it calls `audioContext.resume()` to guarantee the sound starts playing as soon as the user interacts with the page, satisfying browser autoplay policies robustly.
    - Fixed inverted guard logic that was blocking all messages
 
 **2. `tradingStore.ts` Fix:**
