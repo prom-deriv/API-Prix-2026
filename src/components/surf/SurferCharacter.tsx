@@ -117,7 +117,7 @@ export default function SurferCharacter({ state, tickHistory, priceChange, scrol
       {/* Surfer */}
       <div className={`relative z-10 ${getAnimationClass()}`}>
         <img 
-          src="/Surf Waves/New Robot Surfing.png"
+          src={state === "riding" || state === "trick" ? "/Surf Waves/New Robot Surfing.png" : "/Surf Waves/Robot Surfing.png"}
           alt="Robot Surfer" 
           className="w-40 h-40 md:w-64 md:h-64 object-contain"
           style={{ 
