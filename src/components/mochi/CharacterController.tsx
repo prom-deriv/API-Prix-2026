@@ -608,8 +608,8 @@ const CharacterController: React.FC<CharacterControllerProps> = ({
         <motion.div
           className="absolute px-4 py-2 rounded-full text-sm font-bold z-50 whitespace-nowrap transform -translate-x-1/2"
           style={{
-            left: `calc(50% + ${isMochiLeading ? MOCHI_LEAD_X : MOTO_LEAD_X}px)`,
-            top: isMochiLeading && mochiY > 0 ? `${mochiY - 200}px` : isMotoLeading && motoY > 0 ? `${motoY - 200}px` : "30%",
+            left: `calc(50% + ${(isMochiLeading ? MOCHI_LEAD_X : MOTO_LEAD_X) + 160}px)`,
+            top: isMochiLeading && mochiY > 0 ? `${mochiY - 120}px` : isMotoLeading && motoY > 0 ? `${motoY - 120}px` : "30%",
             backgroundColor: isMochiLeading ? "#DFF2D8" : "#FFE5E5",
             color: "#8B5E3C",
             border: `2px solid ${isMochiLeading ? "#7CB876" : "#FF4B4B"}`,
