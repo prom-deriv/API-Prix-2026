@@ -57,7 +57,6 @@ export function AccountProvider({ children }: AccountProviderProps) {
     }
   })
 
-  const balanceHandlerRef = useRef<((data: any) => void) | null>(null)
   const authorizeHandlerRef = useRef<((data: any) => void) | null>(null)
   const isAuthenticatingRef = useRef<boolean>(false)
   const authRetryCountRef = useRef<number>(0)
