@@ -511,8 +511,10 @@ const TradingPanel: React.FC = () => {
 
         const buyResult = await api.buyContract(currentProposal.id, currentProposal.ask_price)
         
-        // Deduct from balance
-        deductBalance(tradeAmount)
+        // For real accounts, do NOT manually deduct balance.
+        // The balance subscription (subscribeBalance) receives real-time
+        // updates from the server after each trade, which is authoritative.
+        // Manual deduction causes stale closure issues leading to $NaN.
 
         // Track contract result for real accounts
         if (buyResult?.contract_id) {
@@ -566,9 +568,11 @@ const TradingPanel: React.FC = () => {
           
           const unsubscribe = api.subscribeProposalOpenContract(buyResult.contract_id, (contract) => {
             if (contract.is_sold === 1 || contract.status === "sold") {
-              // Contract settled
-              const profit = contract.profit || 0
-              updateBalance(accountBalance + profit)
+              // Contract settled — do NOT manually update balance here.
+              // The balance subscription (subscribeBalance) handles real-time
+              // balance updates from the server, which is the authoritative source.
+              // Manual calculation causes $NaN due to stale closures and string values.
+              const profit = Number(contract.profit) || 0
               
               // Remove from active contracts
               removeActiveContract(buyResult.contract_id)

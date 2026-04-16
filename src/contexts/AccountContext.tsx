@@ -173,11 +173,15 @@ export function AccountProvider({ children }: AccountProviderProps) {
         })));
         
         const realAccount = 
-          // Priority 1: CR account with USD currency
-          accountsData.data.find((a: any) => a.account_id?.startsWith('CR') && a.currency === 'USD') ||
-          // Priority 2: Any CR account
+          // Priority 1: Non-demo account with USD currency
+          accountsData.data.find((a: any) => a.account_type !== "demo" && a.currency === 'USD') ||
+          // Priority 2: Non-demo account with USD-like currency (case insensitive)
+          accountsData.data.find((a: any) => a.account_type !== "demo" && a.currency?.toUpperCase() === 'USD') ||
+          // Priority 3: CR-prefixed account (legacy V1 format)
           accountsData.data.find((a: any) => a.account_id?.startsWith('CR')) ||
-          // Priority 3: Any non-demo account
+          // Priority 4: Any non-demo, non-virtual account
+          accountsData.data.find((a: any) => a.account_type !== "demo" && a.account_type !== "virtual") ||
+          // Priority 5: Any non-demo account
           accountsData.data.find((a: any) => a.account_type !== "demo") ||
           // Fallback: first account
           accountsData.data[0];
