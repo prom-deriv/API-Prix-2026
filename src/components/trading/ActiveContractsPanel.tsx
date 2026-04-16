@@ -35,7 +35,7 @@ export default function ActiveContractsPanel() {
       const contract = activeContracts.find(c => c.contract_id === contractId)
       if (contract) {
         addRecentTrade({
-          app_id: 0,
+          app_id: import.meta.env.VITE_DERIV_APP_ID || "1089",
           buy_price: contract.buy_price,
           contract_id: contractId,
           contract_type: contract.contract_type,

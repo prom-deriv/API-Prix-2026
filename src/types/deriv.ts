@@ -213,7 +213,7 @@ export interface PortfolioResponse {
 export interface ProfitTable {
   count: number
   transactions: Array<{
-    app_id: number
+    app_id: number | string
     buy_price: number
     contract_id: number
     contract_type: string

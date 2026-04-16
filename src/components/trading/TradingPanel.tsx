@@ -423,7 +423,7 @@ const TradingPanel: React.FC = () => {
           
           // Add to trade history
           addRecentTrade({
-            app_id: 1089,
+            app_id: import.meta.env.VITE_DERIV_APP_ID || "1089",
             buy_price: tradeAmount,
             contract_id: demoContractId,
             contract_type: contractType,
@@ -586,7 +586,7 @@ const TradingPanel: React.FC = () => {
               
               // Add to trade history with entry/exit tick data
               addRecentTrade({
-                app_id: 1089,
+                app_id: import.meta.env.VITE_DERIV_APP_ID || "1089",
                 buy_price: contract.buy_price || parseFloat(amount),
                 contract_id: contract.contract_id,
                 contract_type: contract.contract_type || contractType,
