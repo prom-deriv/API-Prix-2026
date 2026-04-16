@@ -309,9 +309,6 @@ export function AccountProvider({ children }: AccountProviderProps) {
     if (accountInfo.accountType === "real") {
       const api = getDerivAPI()
 
-      // Set up balance subscription handler
-      balanceHandlerRef.current = api.on("balance", handleBalanceUpdate)
-
       // Set up authorize response handler
       authorizeHandlerRef.current = api.on("authorize", handleAuthorize)
 
@@ -334,10 +331,6 @@ export function AccountProvider({ children }: AccountProviderProps) {
 
     return () => {
         // Clean up handlers
-        if (balanceHandlerRef.current) {
-          api.off("balance", balanceHandlerRef.current)
-          balanceHandlerRef.current = null
-        }
         if (authorizeHandlerRef.current) {
           api.off("authorize", authorizeHandlerRef.current)
           authorizeHandlerRef.current = null

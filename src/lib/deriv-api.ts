@@ -1357,7 +1357,7 @@ class DerivAPI {
   }
 
   // Subscribe to balance updates (for real accounts)
-  subscribeBalance(callback: (balance: { balance: number; currency: string }) => void): () => void {
+  subscribeBalance(callback: (balance: { balance: number; currency: string, loginid?: string }) => void): () => void {
     const reqId = this.getNextReqId()
     const subscriptionKey = "balance_subscription"
 
@@ -1371,13 +1371,14 @@ class DerivAPI {
 
     // Track this subscription for resubscription after reconnection
     this.activeSubscriptions.set(subscriptionKey, {
-      type: 'proposal_open_contract',
+      type: 'balance' as any,
       params: {},
       callback,
     })
 
     this.send({
       balance: 1,
+      account: "all",
       subscribe: 1,
       req_id: reqId,
     })
