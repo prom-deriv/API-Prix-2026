@@ -209,7 +209,10 @@ export function AccountProvider({ children }: AccountProviderProps) {
         
         // 3. Connect WebSocket using OTP URL
         await api.connectWithOTP(otpUrl);
-        
+
+        // 3.5 Store credentials for OTP refresh on reconnect
+        api.storeCredentials(tokenString, accountId);
+
         // 4. Restore active subscriptions (ticks/ohlc) after connection
         api.restoreSubscriptions().catch(err => {
           console.warn("[AccountContext] Failed to restore subscriptions:", err)

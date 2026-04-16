@@ -41,6 +41,7 @@ interface ActiveSubscription {
 
 class DerivAPI {
   private ws: WebSocket | null = null
+  private publicWs: WebSocket | null = null // Separate public WS for market data (contracts_for, active_symbols)
   private currentWsUrl: string = WS_PUBLIC_URL
   private handlers: Map<string, MessageHandler[]> = new Map()
   private reqId: number = 0
@@ -59,6 +60,9 @@ class DerivAPI {
   private pendingRequestsQueue: Array<() => void> = [] // Queue for requests sent before WebSocket is ready
   private isSubscribing: boolean = false // Mutex to prevent concurrent subscription requests
   private isHandlingAuth: boolean = false // Mutex to prevent duplicate auth handling
+  // Store credentials for OTP refresh on reconnect
+  private storedAccessToken: string | null = null
+  private storedAccountId: string | null = null
 
   constructor() {
     // Don't auto-connect in constructor - let the app control when to connect
@@ -117,6 +121,82 @@ class DerivAPI {
   }
 
   /**
+   * Store credentials so OTP can be refreshed on reconnect
+   */
+  storeCredentials(accessToken: string, accountId: string): void {
+    this.storedAccessToken = accessToken
+    this.storedAccountId = accountId
+    console.log(`[DerivAPI] Stored credentials for account ${accountId} (for OTP refresh on reconnect)`)
+  }
+
+  /**
+   * Ensure public WebSocket is connected (for market data like contracts_for)
+   * This keeps a separate connection to the public endpoint alive
+   */
+  private async ensurePublicWs(): Promise<WebSocket> {
+    if (this.publicWs?.readyState === WebSocket.OPEN) {
+      return this.publicWs
+    }
+
+    return new Promise((resolve, reject) => {
+      console.log("[DerivAPI] Connecting public WS for market data...")
+      this.publicWs = new WebSocket(WS_PUBLIC_URL)
+
+      this.publicWs.onopen = () => {
+        console.log("[DerivAPI] ✅ Public WS connected (for contracts_for, active_symbols)")
+        resolve(this.publicWs!)
+      }
+
+      this.publicWs.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data) as DerivMessage
+          // Route responses to pending requests by req_id
+          if ("echo_req" in data && data.echo_req) {
+            const reqId = (data.echo_req as any).req_id
+            if (reqId && this.pendingRequests.has(reqId)) {
+              if ("error" in data) {
+                const { reject: rej } = this.pendingRequests.get(reqId)!
+                this.pendingRequests.delete(reqId)
+                rej(new Error((data.error as any)?.message || "Public WS error"))
+              } else {
+                const { resolve: res } = this.pendingRequests.get(reqId)!
+                this.pendingRequests.delete(reqId)
+                res(data)
+              }
+            }
+          }
+        } catch (error) {
+          console.error("[DerivAPI] Failed to parse public WS message:", error)
+        }
+      }
+
+      this.publicWs.onerror = (error) => {
+        console.error("[DerivAPI] Public WS error:", error)
+        reject(error)
+      }
+
+      this.publicWs.onclose = () => {
+        console.log("[DerivAPI] Public WS closed")
+        this.publicWs = null
+      }
+
+      setTimeout(() => reject(new Error("Public WS connection timeout")), 10000)
+    })
+  }
+
+  /**
+   * Send a message on the public WebSocket (for market data)
+   */
+  private sendPublic(message: object): void {
+    if (!this.publicWs || this.publicWs.readyState !== WebSocket.OPEN) {
+      console.error("[DerivAPI] Public WS not connected for sendPublic")
+      return
+    }
+    console.log(`[DerivAPI] 🚀 SENDING (public):`, JSON.stringify(message))
+    this.publicWs.send(JSON.stringify(message))
+  }
+
+  /**
    * Connect to Deriv API using OTP-authenticated WebSocket URL
    * @param otpUrl - WebSocket URL with OTP from getWebSocketUrl() REST call
    */
@@ -128,9 +208,23 @@ class DerivAPI {
         return
       }
 
-      // Disconnect existing connection cleanly if it's connected to a different URL
+      // Disconnect existing authenticated connection (but keep publicWs alive)
       if (this.ws) {
-        this.disconnect()
+        // Only close the authenticated WS, not publicWs
+        this.shouldReconnect = false
+        this.stopPingInterval()
+        if (this.ws) {
+          this.ws.onclose = null
+          this.ws.onerror = null
+          this.ws.onmessage = null
+          this.ws.onopen = null
+          if (this.ws.readyState !== WebSocket.CONNECTING) {
+            this.ws.close()
+          }
+          this.ws = null
+        }
+        this.isConnectedState = false
+        this.isAuthorized = false
       }
 
       if (this.isConnecting) {
@@ -307,16 +401,35 @@ class DerivAPI {
 
     console.log(`[DerivAPI] Attempting reconnect ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`)
 
-    setTimeout(() => {
-      if (this.shouldReconnect) {
-        const reconnectPromise = this.currentWsUrl === WS_PUBLIC_URL 
-          ? this.connect() 
-          : this.connectWithOTP(this.currentWsUrl);
+    setTimeout(async () => {
+      if (!this.shouldReconnect) return
 
-        reconnectPromise.then(() => {
-          // Resubscribe to all active subscriptions
-          this.resubscribe()
-        })
+      try {
+        if (this.currentWsUrl === WS_PUBLIC_URL) {
+          // Public endpoint - just reconnect directly
+          await this.connect()
+        } else if (this.storedAccessToken && this.storedAccountId) {
+          // Authenticated endpoint - get FRESH OTP (old one is expired/one-time-use)
+          console.log("[DerivAPI] 🔄 Requesting fresh OTP for reconnect...")
+          const otpResponse = await this.getWebSocketUrl(this.storedAccessToken, this.storedAccountId)
+          const freshUrl = otpResponse.data?.url
+          if (freshUrl) {
+            await this.connectWithOTP(freshUrl)
+          } else {
+            console.error("[DerivAPI] Failed to get fresh OTP URL, falling back to public")
+            await this.connect()
+          }
+        } else {
+          // No stored credentials - fall back to public
+          console.warn("[DerivAPI] No stored credentials for OTP refresh, connecting to public endpoint")
+          await this.connect()
+        }
+        // Resubscribe to all active subscriptions
+        this.resubscribe()
+      } catch (error) {
+        console.error("[DerivAPI] Reconnect failed:", error)
+        // Try again
+        this.attemptReconnect()
       }
     }, delay)
   }
@@ -1214,6 +1327,9 @@ class DerivAPI {
   private async getContractsForAttempt(symbol: string): Promise<ContractsForResponse["contracts_for"]> {
     const reqId = this.getNextReqId()
 
+    // Always use public WS for contracts_for - authenticated WS may return fewer contract types
+    await this.ensurePublicWs()
+
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(reqId, {
         resolve: (data: ContractsForResponse) => {
@@ -1226,7 +1342,7 @@ class DerivAPI {
         reject,
       })
 
-      this.send({
+      this.sendPublic({
         contracts_for: symbol,
         req_id: reqId,
       })
@@ -1969,18 +2085,26 @@ class DerivAPI {
     this.stopPingInterval()
 
     if (this.ws) {
-      // Clear all event handlers to prevent old callbacks from firing on a dying connection
       this.ws.onclose = null
       this.ws.onerror = null
       this.ws.onmessage = null
       this.ws.onopen = null
-      
-      // Only close if not in CONNECTING state (readyState 0)
-      // Closing a CONNECTING WebSocket causes "WebSocket is closed before the connection is established" error
       if (this.ws.readyState !== WebSocket.CONNECTING) {
         this.ws.close()
       }
       this.ws = null
+    }
+
+    // Also close the public WS
+    if (this.publicWs) {
+      this.publicWs.onclose = null
+      this.publicWs.onerror = null
+      this.publicWs.onmessage = null
+      this.publicWs.onopen = null
+      if (this.publicWs.readyState !== WebSocket.CONNECTING) {
+        this.publicWs.close()
+      }
+      this.publicWs = null
     }
 
     this.isConnecting = false
