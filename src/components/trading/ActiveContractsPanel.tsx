@@ -85,8 +85,8 @@ export default function ActiveContractsPanel() {
 
         <div className="space-y-3 overflow-y-auto max-h-[600px] pr-2 scrollbar-thin">
           {activeContracts.map((contract) => {
-            const isProfitable = contract.profit > 0
-            const profitPercentage = ((contract.profit / contract.buy_price) * 100).toFixed(2)
+            const isProfitable = Number(contract.profit) > 0
+            const profitPercentage = ((Number(contract.profit) / Number(contract.buy_price)) * 100).toFixed(2)
             const isExpired = contract.is_expired === 1
             const isSold = contract.is_sold === 1
 
@@ -144,11 +144,11 @@ export default function ActiveContractsPanel() {
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs">Buy Price</p>
-                    <p className="font-semibold tabular-nums">${contract.buy_price.toFixed(2)}</p>
+                    <p className="font-semibold tabular-nums">${Number(contract.buy_price).toFixed(2)}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs">Payout</p>
-                    <p className="font-semibold tabular-nums">${contract.payout.toFixed(2)}</p>
+                    <p className="font-semibold tabular-nums">${Number(contract.payout).toFixed(2)}</p>
                   </div>
                 </div>
 
@@ -167,7 +167,7 @@ export default function ActiveContractsPanel() {
                       <TrendingDown className="w-5 h-5 text-loss" />
                     )}
                     <span className={`font-semibold tabular-nums ${isProfitable ? 'text-profit' : 'text-loss'}`}>
-                      {isProfitable ? "+" : ""}${contract.profit.toFixed(2)}
+                      {isProfitable ? "+" : ""}${Number(contract.profit).toFixed(2)}
                     </span>
                   </div>
                   <span

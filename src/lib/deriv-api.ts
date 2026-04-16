@@ -698,11 +698,24 @@ class DerivAPI {
         resolve: (data: any) => {
           // Handle both old and new API response formats
           if (data.active_symbols && Array.isArray(data.active_symbols)) {
-            // 🔍 LIGHTWEIGHT DIAGNOSTIC: Log summary only (avoid heavy processing)
-            console.log(`[DerivAPI] ✅ Loaded ${data.active_symbols.length} symbols`)
+            // V2 API returns different field names than V1
+            // Map V2 fields to V1 field names for backward compatibility
+            const mappedSymbols = data.active_symbols.map((s: any) => ({
+              // Preserve all original fields
+              ...s,
+              // Map V2 -> V1 field names (use V1 name if present, otherwise map from V2)
+              symbol: s.symbol || s.underlying_symbol,
+              display_name: s.display_name || s.underlying_symbol_name,
+              market_display_name: s.market_display_name || s.market || "Other",
+              submarket_display_name: s.submarket_display_name || s.submarket || "",
+              symbol_type: s.symbol_type || s.underlying_symbol_type || "",
+              pip: s.pip || s.pip_size || 0.01,
+            }))
+
+            console.log(`[DerivAPI] ✅ Loaded ${mappedSymbols.length} symbols`)
             
             // Sample first 3 symbols for verification
-            const sampleSymbols = data.active_symbols.slice(0, 3).map((s: any) => ({
+            const sampleSymbols = mappedSymbols.slice(0, 3).map((s: any) => ({
               symbol: s.symbol,
               display: s.display_name,
               market: s.market_display_name,
@@ -710,7 +723,7 @@ class DerivAPI {
             }))
             console.log("[DerivAPI] 📊 Sample symbols:", sampleSymbols)
             
-            resolve(data.active_symbols)
+            resolve(mappedSymbols)
           } else if (data.data) {
             // New API format: { data: { active_symbols: [...] } } or { data: [...] }
             if (data.data.active_symbols && Array.isArray(data.data.active_symbols)) {
