@@ -1089,21 +1089,86 @@ const simulateDemoTrade = useCallback((contractType: ContractType): Promise<void
 - Toggle between modes seamlessly with localStorage persistence
 - Experience realistic demo trading with 50/50 outcomes
 
+### Real Account Trading Fix — Dual WebSocket & OTP Reconnect (April 16, 2026)
+
+**Problem:** Trading on a real (non-demo) account failed with the error `"Failed to get proposal"`. The browser console revealed three distinct root causes preventing real account trading.
+
+**Console Evidence:**
+1. `API Error: Input validation failed: Properties not allowed: symbol.` — The proposal request was sending `"symbol":"R_100"` instead of the V2 API-required `"underlying_symbol":"R_100"`
+2. `contracts_for` returning fewer contract types on authenticated WebSocket — Higher/Lower and Touch/No Touch tabs appeared disabled
+3. OTP WebSocket URL expired on reconnect — After any connection drop, the one-time-use OTP URL couldn't be reused, causing "Please log in" errors
+
+**Root Cause Analysis:**
+
+1. **V2 API Field Name Change:** The Deriv Trading API V2 renamed the `symbol` field to `underlying_symbol` in proposal requests. The `getProposal()` method had already been updated locally to use `underlying_symbol: symbolValue`, but this fix hadn't been deployed yet. The console screenshot confirmed the production code was still sending `{"symbol":"R_100"}`.
+
+2. **Authenticated WS Restricts Market Data:** When connected via OTP-authenticated WebSocket, the `contracts_for` API call returned a restricted set of contract types compared to the public endpoint. This caused the TradingPanel to incorrectly disable Higher/Lower and Touch/No Touch contract categories.
+
+3. **One-Time-Use OTP URLs:** The OTP URL from `/accounts/{id}/otp` is single-use. When the WebSocket connection dropped (network hiccup, server timeout), the `attemptReconnect()` method tried to reconnect using the same expired URL, which always failed silently.
+
+**Solution: Three Architectural Fixes**
+
+1. **Dual WebSocket Architecture** (`src/lib/deriv-api.ts`):
+   - Added a separate `publicWs: WebSocket` connection dedicated to market data queries
+   - Created `ensurePublicWs()` method that lazily connects to `wss://api.derivws.com/trading/v1/options/ws/public`
+   - Created `sendPublic()` method for routing messages through the public WebSocket
+   - Modified `getContractsForAttempt()` to use `sendPublic()` instead of `send()`
+   - The public WS routes responses back to `pendingRequests` by `req_id`, sharing the same request tracking
+   - `disconnect()` now properly closes both `ws` and `publicWs`
+
+   ```
+   Architecture:
+   ┌─────────────────┐     ┌─────────────────────────────────┐
+   │  Authenticated   │────▶│ Proposals, Buy, Balance, Sell   │
+   │  WS (OTP URL)   │     │ (requires auth)                 │
+   └─────────────────┘     └─────────────────────────────────┘
+   ┌─────────────────┐     ┌─────────────────────────────────┐
+   │  Public WS      │────▶│ contracts_for, active_symbols   │
+   │  (always alive) │     │ (no auth needed, full data)     │
+   └─────────────────┘     └─────────────────────────────────┘
+   ```
+
+2. **Fresh OTP on Reconnect** (`src/lib/deriv-api.ts`):
+   - Added `storedAccessToken` and `storedAccountId` private fields
+   - Added `storeCredentials(accessToken, accountId)` public method
+   - Modified `attemptReconnect()`:
+     - If on public endpoint → reconnect directly
+     - If stored credentials exist → call `getWebSocketUrl()` REST API to get a **fresh OTP URL** → connect with new URL
+     - If no credentials → fall back to public endpoint
+   - This ensures the authenticated connection can always be re-established after a drop
+
+3. **Credential Storage in AccountContext** (`src/contexts/AccountContext.tsx`):
+   - After `api.connectWithOTP(otpUrl)` succeeds, immediately calls `api.storeCredentials(tokenString, accountId)`
+   - This stores the OAuth access token and selected account ID for OTP refresh during reconnection
+   - Credentials are stored in memory only (not persisted to disk/localStorage for security)
+
+**Files Modified:**
+- `src/lib/deriv-api.ts` — Dual WS architecture, fresh OTP reconnect, publicWs cleanup
+- `src/contexts/AccountContext.tsx` — Store credentials after OTP connection
+- `vibe-logs.md` — This documentation entry
+
+**Result:**
+- ✅ Proposal requests use correct `underlying_symbol` field (V2 API compliant)
+- ✅ All contract types (Rise/Fall, Higher/Lower, Touch/No Touch) available via public WS
+- ✅ WebSocket reconnection gets fresh OTP instead of reusing expired URL
+- ✅ `disconnect()` properly cleans up both authenticated and public WebSockets
+- ✅ TypeScript compiles with zero errors, build passes clean
+
 ---
 
 ## Future Enhancements
-1. Full OAuth 2.0 flow with Deriv (currently uses direct API token)
+1. ~~Full OAuth 2.0 flow with Deriv~~ ✅ Implemented (V2 PKCE OAuth + OTP WebSocket)
 2. Advanced strategies with backtesting
 3. Mobile app (React Native)
 4. Social features
 
 ## Metrics
-- **Dev Time**: ~2 hours
-- **Lines of Code**: ~2000
-- **Components**: 15+
-- **API Endpoints**: 8
-- **Build Size**: 400KB (126KB gzipped)
+- **Dev Time**: ~2 hours initial + ongoing iterations
+- **Lines of Code**: ~5000+
+- **Components**: 25+
+- **API Endpoints**: 12+
+- **Build Size**: 785KB (235KB gzipped)
 
 ---
-*Last Updated: April 3, 2026*
+*Last Updated: April 16, 2026*
 *PROMO Trade Team - Deriv API Grand Prix*
