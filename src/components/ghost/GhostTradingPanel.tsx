@@ -30,7 +30,7 @@ export interface GhostTradingPanelProps {
 
 const GhostTradingPanel: React.FC<GhostTradingPanelProps> = ({ onTradeStart }) => {
   const [isExpanded, setIsExpanded] = useState(true)
-  const { currentSymbol, currentTick } = useTradingStore()
+  const { currentSymbol, currentTick, addDerivPoints } = useTradingStore()
   const { balance, accountType } = useAccount()
   const { addGhostTrade, settleGhostTrade, activeGhostTrade, mascotEmotion } = useGhost()
   
@@ -162,6 +162,12 @@ const GhostTradingPanel: React.FC<GhostTradingPanelProps> = ({ onTradeStart }) =
           duration: parseInt(duration),
           durationUnit,
         })
+      }
+
+      // Add Deriv Points based on the stake amount
+      const pointsAwarded = Math.floor(tradeAmount)
+      if (pointsAwarded > 0) {
+        addDerivPoints(pointsAwarded)
       }
 
       // Minimize dashboard when trade starts

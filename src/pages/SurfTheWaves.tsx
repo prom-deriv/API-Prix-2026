@@ -35,6 +35,7 @@ function SurfTheWavesContent() {
     setIsSymbolLoading,
     fetchSymbols,
     clearState,
+    addDerivPoints,
   } = useTradingStore()
 
   const {
@@ -545,6 +546,12 @@ function SurfTheWavesContent() {
         setSurferState("riding")
         sessionDurationRef.current = 0
         setSessionDuration(0)
+        
+        // Add Deriv Points based on the stake amount
+        const pointsAwarded = Math.floor(setup.stake)
+        if (pointsAwarded > 0) {
+          addDerivPoints(pointsAwarded)
+        }
         
         // Play session start sound
         const soundMgr = getSoundManager()
