@@ -81,42 +81,48 @@ class DerivAPI {
    */
   async cleanSlateStartup(): Promise<void> {
     // Only run if WebSocket is connected and authorized
-    if (!this.isReady()) {
-      console.debug("[DerivAPI] Not ready for clean slate, skipping (expected during React Strict Mode)")
+    if (!this.isConnectedState) {
+      console.warn("[DerivAPI] Cannot run clean slate: Not connected to WebSocket")
       return
     }
 
     console.log("[DerivAPI] 🧹 Clean slate startup - clearing all ghost subscriptions...")
 
-    // Forget ticks and candles subscriptions
-    // Note: 'proposal_open_contract' is not supported on public endpoint
-    const results = await Promise.allSettled([
-      this.forgetAll('ticks'),
-      this.forgetAll('candles'),
-    ])
+    try {
+      // 1. Send forget_all for ticks
+      console.log("[DerivAPI] 🔌 Forcing termination of all ticks subscriptions")
+      await this.send({
+        forget_all: "ticks",
+        req_id: this.getNextReqId()
+      })
 
-    results.forEach((result, i) => {
-      const types = ['ticks', 'candles']
-      if (result.status === 'fulfilled') {
-        console.log(`[DerivAPI] ✅ Cleaned up ${types[i]} subscriptions`)
-      } else {
-        console.warn(`[DerivAPI] ⚠️ ${types[i]} cleanup had issues (expected if none existed)`)
+      // 2. Send forget_all for candles (just in case)
+      console.log("[DerivAPI] 🔌 Forcing termination of all candles subscriptions")
+      await this.send({
+        forget_all: "candles",
+        req_id: this.getNextReqId()
+      })
+
+      // 3. Keep balance handlers before clearing all handlers
+      const balanceHandlers = this.handlers.get("balance") ? [...this.handlers.get("balance")!] : []
+      const balanceSub = this.activeSubscriptions.get("balance_subscription")
+
+      // 4. Clear our local state
+      this.clearAllHandlers()
+      this.activeSubscriptions.clear()
+      
+      // 5. Restore only balance subscriptions since they should survive clean slate
+      if (balanceHandlers.length > 0) {
+        this.handlers.set("balance", balanceHandlers)
       }
-    })
+      if (balanceSub) {
+        this.activeSubscriptions.set("balance_subscription", balanceSub)
+      }
 
-    // Clear all handlers to prevent message routing conflicts
-    this.handlers.clear()
-
-    console.log("[DerivAPI] ✅ Clean slate complete - ready for fresh subscriptions")
-  }
-
-  // Public method to initialize connection
-  async initialize(): Promise<void> {
-    if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
-      return
+      console.log("[DerivAPI] ✅ Clean slate complete - ready for fresh subscriptions")
+    } catch (error) {
+      console.error("[DerivAPI] ❌ Error during clean slate startup:", error)
     }
-
-    return this.connect()
   }
 
   /**
@@ -718,6 +724,13 @@ class DerivAPI {
   // Clear all event handlers (for cleanup without triggering forget_all again)
   clearAllHandlers(): void {
     this.handlers.clear()
+  }
+
+  // Initialize connection explicitly
+  async initialize(): Promise<void> {
+    if (!this.isConnectedState && !this.isConnecting) {
+      await this.connect()
+    }
   }
 
   // Public method to check if WebSocket is ready for requests
