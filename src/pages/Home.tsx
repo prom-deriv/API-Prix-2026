@@ -252,7 +252,7 @@ function Home() {
       if (ohlcUnsubscribeRef.current) {
         ohlcUnsubscribeRef.current()
       }
-      getDerivAPI().disconnect() 
+      // Removed getDerivAPI().disconnect() so auth persists across pages
     }
   }, [])
 
