@@ -56,7 +56,7 @@ function SurfTheWavesContent() {
     performTrick,
   } = useSurf()
 
-  const { balance, addBalance, deductBalance, accountType } = useAccount()
+  const { balance, addBalance, deductBalance, accountType, refreshBalance } = useAccount()
 
   const tickUnsubscribeRef = useRef<(() => void) | null>(null)
   const loadingSymbolRef = useRef<string | null>(null)
@@ -513,24 +513,25 @@ function SurfTheWavesContent() {
               targetDuration: setup.duration
             })
             
-            api.subscribeProposalOpenContract(buyResult.contract_id, (contract) => {
-              if (contract.is_sold === 1 || contract.status === "sold") {
-                const profit = contract.profit || 0
-                endSession(
-                  `surf-${buyResult.contract_id}`,
-                  contract.sell_spot || contract.current_spot || 0,
-                  "finished",
-                  profit
-                )
-                setSurferState(profit > 0 ? "celebrate" : "wipeout")
-                const soundMgr = getSoundManager()
-                soundMgr.playSessionEnd(profit > 0)
-                setTimeout(() => {
-                  setSurferState("idle")
-                  setActiveSetup(null)
-                }, 3000)
-              }
-            })
+              api.subscribeProposalOpenContract(buyResult.contract_id, (contract) => {
+                if (contract.is_sold === 1 || contract.status === "sold") {
+                  const profit = contract.profit || 0
+                  refreshBalance()
+                  endSession(
+                    `surf-${buyResult.contract_id}`,
+                    contract.sell_spot || contract.current_spot || 0,
+                    "finished",
+                    profit
+                  )
+                  setSurferState(profit > 0 ? "celebrate" : "wipeout")
+                  const soundMgr = getSoundManager()
+                  soundMgr.playSessionEnd(profit > 0)
+                  setTimeout(() => {
+                    setSurferState("idle")
+                    setActiveSetup(null)
+                  }, 3000)
+                }
+              })
           }
         } else {
           // Demo local simulation

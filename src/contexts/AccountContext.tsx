@@ -21,6 +21,7 @@ interface AccountContextType extends AccountInfo {
   addBalance: (amount: number) => void
   deductBalance: (amount: number) => void
   resetBalance: () => void
+  refreshBalance: () => Promise<void>
 }
 
 const DEMO_BALANCE = 10000
@@ -389,6 +390,24 @@ export function AccountProvider({ children }: AccountProviderProps) {
     }))
   }, [])
 
+  const refreshBalance = useCallback(async () => {
+    if (accountInfo.accountType === 'real') {
+      try {
+        const api = getDerivAPI()
+        const balanceData = await api.getBalance()
+        if (balanceData?.balance !== undefined) {
+          setAccountInfo(prev => ({
+            ...prev,
+            balance: Number(balanceData.balance),
+            currency: balanceData.currency || prev.currency
+          }))
+        }
+      } catch (err) {
+        console.error('[AccountContext] Failed to manually refresh balance', err)
+      }
+    }
+  }, [accountInfo.accountType])
+
   const value: AccountContextType = {
     ...accountInfo,
     setAccountType,
@@ -398,6 +417,7 @@ export function AccountProvider({ children }: AccountProviderProps) {
     addBalance,
     deductBalance,
     resetBalance,
+    refreshBalance,
   }
 
   return (

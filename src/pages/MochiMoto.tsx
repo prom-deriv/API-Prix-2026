@@ -503,11 +503,14 @@ function MochiMoto() {
 }
 
 function GhostProviderWithAccount({ children }: { children: React.ReactNode }) {
-  const { addBalance, deductBalance, accountType } = useAccount()
+  const { addBalance, deductBalance, accountType, refreshBalance } = useAccount()
   return (
     <GhostProvider onTradeSettle={(profit) => {
-      // For real accounts, we don't manually adjust balance, Deriv does it
-      if (accountType === "real") return;
+      // For real accounts, we manually refresh the balance to see it immediately
+      if (accountType === "real") {
+        refreshBalance()
+        return
+      }
       
       if (profit > 0) {
         addBalance(profit)
