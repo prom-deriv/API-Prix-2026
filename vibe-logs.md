@@ -901,6 +901,18 @@ AFTER (Clean):
 3. **Build Verification:**
    - Ran `npm run build` to ensure there were no TypeScript or bundling errors. The build completed successfully, confirming it is safe to host on Vercel.
 
+### Game Balance Refresh Fix (April 17, 2026)
+
+**Problem:** After completing a real-money trade in the Mochi Moto and Surf Waves games, the account balance was not immediately refreshing, causing a disconnect between the user's actual funds and what was displayed on screen.
+
+**Solution: Exposed and Integrated `refreshBalance` Function**
+
+1. **Exposed `refreshBalance` in Context** (`src/contexts/AccountContext.tsx`):
+   - Modified `AccountContext` to export the existing internal balance refresh logic as a callable `refreshBalance()` function.
+
+2. **Integrated Refresh into Game Loops** (`src/pages/MochiMoto.tsx`, `src/pages/SurfTheWaves.tsx`):
+   - Called `refreshBalance()` immediately after a trade settles within the respective game loops, ensuring the balance updates instantly upon trade completion.
+
 ### Ambient Waves Sound Enhancement (April 14, 2026)
 
 **Problem:** The ambient ocean wave sound in the "Surf the Market Waves" game was too quiet, making the experience less immersive. The browser's autoplay policy also required user interaction before playing audio, which wasn't clearly tied to obvious game actions.
