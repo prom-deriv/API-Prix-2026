@@ -186,7 +186,6 @@ function SurfTheWavesContent() {
   useEffect(() => {
     return () => { 
       if (tickUnsubscribeRef.current) tickUnsubscribeRef.current()
-      getDerivAPI().disconnect() 
     }
   }, [])
 

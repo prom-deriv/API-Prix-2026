@@ -159,7 +159,6 @@ function MochiMotoContent() {
   useEffect(() => {
     return () => { 
       if (tickUnsubscribeRef.current) tickUnsubscribeRef.current()
-      getDerivAPI().disconnect() 
     }
   }, [])
 
