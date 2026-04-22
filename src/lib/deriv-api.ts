@@ -215,6 +215,13 @@ class DerivAPI {
 
       // Disconnect existing authenticated connection (but keep publicWs alive)
       if (this.ws) {
+        // Reject all pending requests on the old connection to prevent timeout errors
+        const error = new Error("Connection replaced")
+        for (const [reqId, { reject }] of this.pendingRequests.entries()) {
+          reject(error)
+        }
+        this.pendingRequests.clear()
+
         // Only close the authenticated WS, not publicWs
         this.shouldReconnect = false
         this.stopPingInterval()
@@ -311,6 +318,13 @@ class DerivAPI {
 
       // Disconnect existing connection cleanly if it's connected to a different URL
       if (this.ws) {
+        // Reject all pending requests on the old connection to prevent timeout errors
+        const error = new Error("Connection replaced")
+        for (const [reqId, { reject }] of this.pendingRequests.entries()) {
+          reject(error)
+        }
+        this.pendingRequests.clear()
+        
         this.disconnect()
       }
 

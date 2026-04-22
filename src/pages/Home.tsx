@@ -281,6 +281,19 @@ function Home() {
       const api = getDerivAPI()
       
       try {
+        // Helper to handle API requests and specifically ignore "Connection replaced" errors
+        const fetchWithRetry = async (fetchFn: () => Promise<any>) => {
+          try {
+            return await fetchFn()
+          } catch (err: any) {
+            if (err.message === "Connection replaced") {
+              console.log("[Home] Ignoring 'Connection replaced' error during initialization")
+              return null
+            }
+            throw err
+          }
+        }
+
         // Fetch appropriate history based on chart style
         if (chartStyle === 'area' || chartStyle === 'line') {
           const history = await api.getTickHistory(symbolToLoad, 1000)
@@ -368,43 +381,68 @@ function Home() {
       
       const api = getDerivAPI()
       
+      // Helper to handle API requests and specifically ignore "Connection replaced" errors
+      const fetchWithRetry = async (fetchFn: () => Promise<any>) => {
+        try {
+          return await fetchFn()
+        } catch (err: any) {
+          if (err.message === "Connection replaced") {
+            console.log("[Home] Ignoring 'Connection replaced' error during chart style change")
+            return null
+          }
+          throw err
+        }
+      }
+      
       // Fetch appropriate history for the new chart style
       try {
         if (chartStyle === 'area' || chartStyle === 'line') {
-          const history = await api.getTickHistory(currentSymbol, 1000)
-          const ticks = history.prices.map((price, i) => ({
-            epoch: history.times[i],
-            quote: price,
-            symbol: currentSymbol,
-          }))
-          setTickHistory(ticks)
-        } else {
-          // 'ohlc' and 'candlestick' both use real OHLC data
-          try {
-            const ohlcData = await api.getOHLCHistory(currentSymbol, 60, 500)
-            const ohlcHistory = ohlcData.candles.map((c) => ({
-              open: Number(c.open),
-              high: Number(c.high),
-              low: Number(c.low),
-              close: Number(c.close),
-              epoch: c.epoch,
-              granularity: 60,
-              symbol: currentSymbol,
-            }))
-            setOHLCHistory(ohlcHistory)
-          } catch (err) {
-            console.warn("[Home] Failed to fetch OHLC history, falling back to tick history:", err)
-            const history = await api.getTickHistory(currentSymbol, 1000)
-            const ticks = history.prices.map((price, i) => ({
+          const history = await fetchWithRetry(() => api.getTickHistory(currentSymbol, 1000))
+          if (history) {
+            const ticks = history.prices.map((price: number, i: number) => ({
               epoch: history.times[i],
               quote: price,
               symbol: currentSymbol,
             }))
             setTickHistory(ticks)
           }
+        } else {
+          // Fetch OHLC history for OHLC and candlestick chart styles (real candles)
+          try {
+            const ohlcData = await fetchWithRetry(() => api.getOHLCHistory(currentSymbol, 60, 500))
+            if (ohlcData) {
+              const ohlcHistory = ohlcData.candles.map((c: any) => ({
+                open: Number(c.open),
+                high: Number(c.high),
+                low: Number(c.low),
+                close: Number(c.close),
+                epoch: c.epoch,
+                granularity: 60,
+                symbol: currentSymbol,
+              }))
+              setOHLCHistory(ohlcHistory)
+            }
+          } catch (err: any) {
+            if (err.message !== "Connection replaced") {
+              console.warn("[Home] Failed to fetch OHLC history, falling back to tick history:", err)
+              const history = await fetchWithRetry(() => api.getTickHistory(currentSymbol, 1000))
+              if (history) {
+                const ticks = history.prices.map((price: number, i: number) => ({
+                  epoch: history.times[i],
+                  quote: price,
+                  symbol: currentSymbol,
+                }))
+                setTickHistory(ticks)
+              }
+            }
+          }
         }
-      } catch (err) {
-        console.error("[Home] Failed to fetch history for chart style change:", err)
+      } catch (err: any) {
+        if (err.message === "Connection replaced") {
+          console.log("[Home] Ignoring 'Connection replaced' error during chart style change")
+        } else {
+          console.error("[Home] Failed to fetch history for chart style change:", err)
+        }
       }
       
       // Subscribe to the correct stream
