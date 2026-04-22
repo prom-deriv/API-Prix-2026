@@ -90,7 +90,7 @@ export function AccountProvider({ children }: AccountProviderProps) {
     }
   }, [])
 
-  const connectReal = useCallback(async (accessToken: string, targetType: AccountType = "real") => {
+  const connectReal = useCallback(async (accessToken: string, targetType: AccountType = "demo") => {
     // Prevent duplicate authentication attempts (race condition fix)
     if (isAuthenticatingRef.current) {
       console.log("[AccountContext] Authentication already in progress, skipping duplicate request")

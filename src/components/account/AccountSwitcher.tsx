@@ -73,7 +73,7 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
       sessionStorage.removeItem("oauth_state")
       
       console.log("[AccountSwitcher] Token received, connecting...")
-      await connectReal(tokenResponse.access_token)
+      await connectReal(tokenResponse.access_token, "demo")
     } catch (err) {
       console.error("[AccountSwitcher] V2 OAuth callback failed:", err)
       setError(err instanceof Error ? err.message : "OAuth authentication failed")
