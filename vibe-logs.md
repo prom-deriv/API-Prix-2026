@@ -57,6 +57,15 @@
 4. **Chart Performance**: 5-second candle grouping, 1000 tick limit
 5. **Barrier Distance Issue**: Implemented relative offsets from Deriv API
 
+### Deriv Demo Account Reset Balance Fix (April 22, 2026)
+
+**Problem:** The "Reset Balance" button in the demo account was only updating the local UI state to $10,000, but wasn't actually communicating with Deriv's servers to reset the backend balance. This caused a desync between the application and the actual Deriv demo account.
+
+**Solution: Integrated V2 REST API for Balance Reset**
+1. **API Integration**: Updated `resetBalance` in `AccountContext.tsx` to call the `derivApi.resetDemoBalance(accessToken, accountId)` method.
+2. **Auto-Refresh**: After a successful reset API call, the app automatically triggers `refreshBalance()` to fetch the new true balance directly via the active WebSocket connection.
+3. **UI Loading State**: Added an `isResetting` loading state in `AccountSwitcher.tsx` to provide visual feedback (a spinning icon) during the API request.
+
 ### Barrier Precision Fix (April 2, 2026)
 
 **Problem:** Barriers appeared too far from the spot price on the chart because the app was treating barriers as absolute values (e.g., `currentPrice + 10`) instead of relative offsets.
