@@ -183,6 +183,11 @@ export interface ProposalOpenContract {
   duration?: number
   duration_unit?: string
   tick_count?: number
+  tick_stream?: Array<{
+    epoch: number
+    tick: number
+    tick_display_value?: string
+  }>
 }
 
 export interface ProposalOpenContractResponse {

@@ -211,8 +211,8 @@ export default function ActiveContractsPanel() {
                           {/* Live Ticks Countdown: Use real ticks if available, otherwise estimate for mock offline demo */}
                           {(() => {
                             let passedTicks = 0;
-                            if (contract.tick_count !== undefined) {
-                              passedTicks = contract.tick_count;
+                            if (contract.tick_stream && contract.tick_stream.length > 0) {
+                              passedTicks = contract.tick_stream.length;
                             } else if (contract.audit?.all_ticks?.length) {
                               passedTicks = contract.audit.all_ticks.length;
                             } else if (contract.shortcode.includes("_demo_")) {

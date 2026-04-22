@@ -657,6 +657,7 @@ const TradingPanel: React.FC = () => {
                 expiry_time: contract.expiry_time,
                 is_expired: contract.is_expired,
                 tick_count: contract.tick_count,
+                tick_stream: contract.tick_stream,
                 audit: contract.audit,
               })
 
