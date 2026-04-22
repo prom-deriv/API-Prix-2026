@@ -51,6 +51,7 @@ const TradingPanel: React.FC = () => {
   const [contractCategory, setContractCategory] = useState<ContractCategory>("RISE_FALL")
   const [isPositiveOffset, setIsPositiveOffset] = useState<boolean>(true)
   const [availableContractTypes, setAvailableContractTypes] = useState<Set<ContractCategory>>(new Set(["RISE_FALL", "HIGHER_LOWER", "TOUCH_NO_TOUCH"]))
+  const [availableContracts, setAvailableContracts] = useState<any[]>([])
   const [isTakeProfitEnabled, setIsTakeProfitEnabled] = useState<boolean>(false)
   const [takeProfitValue, setTakeProfitValue] = useState<string>("")
   const [isStopLossEnabled, setIsStopLossEnabled] = useState<boolean>(false)
@@ -118,6 +119,7 @@ const TradingPanel: React.FC = () => {
         }
         
         const contracts = await api.getContractsFor(currentSymbol)
+        setAvailableContracts(contracts.available)
         
         // 🔍 DIAGNOSTIC: Log contracts_for response for debugging
         console.log(`[TradingPanel] 📋 contracts_for response for ${currentSymbol}:`, contracts)
@@ -706,6 +708,98 @@ const TradingPanel: React.FC = () => {
     return currentTick.quote + signedOffset
   }, [currentTick, barrierOffset, isPositiveOffset])
 
+  // Validate duration
+  const durationError = useMemo(() => {
+    if (!availableContracts.length) return null;
+    
+    // Filter contracts by current category
+    const relevantContracts = availableContracts.filter(c => {
+      if (contractCategory === "RISE_FALL") {
+        return (c.contract_type === "CALL" || c.contract_type === "PUT") && (!c.barrier_category || c.barrier_category === "euro_atm" || c.barriers === 0);
+      } else if (contractCategory === "HIGHER_LOWER") {
+        return (c.contract_type === "CALL" || c.contract_type === "PUT") && (c.barrier_category === "euro_non_atm" || c.barriers === 1);
+      } else if (contractCategory === "TOUCH_NO_TOUCH") {
+        return c.contract_type === "ONETOUCH" || c.contract_type === "NOTOUCH";
+      }
+      return false;
+    });
+
+    if (!relevantContracts.length) return null;
+
+    const val = parseInt(duration);
+    if (isNaN(val) || val <= 0) return "Please enter a valid duration.";
+
+    if (durationUnit === "t") {
+      let minTick = Infinity;
+      let maxTick = -Infinity;
+      let hasTick = false;
+      
+      for (const c of relevantContracts) {
+        if (c.min_contract_duration && c.min_contract_duration.endsWith('t')) {
+          hasTick = true;
+          minTick = Math.min(minTick, parseInt(c.min_contract_duration));
+        }
+        if (c.max_contract_duration && c.max_contract_duration.endsWith('t')) {
+          maxTick = Math.max(maxTick, parseInt(c.max_contract_duration));
+        }
+      }
+      
+      if (!hasTick) return "Trading is not offered for Ticks.";
+      if (val < minTick) return `Minimum duration is ${minTick} ticks.`;
+      if (val > maxTick) return `Maximum duration is ${maxTick} ticks.`;
+      return null;
+    } else {
+      // Time-based duration
+      let minTimeSec = Infinity;
+      let maxTimeSec = -Infinity;
+      let hasTime = false;
+      
+      const parseToSec = (str: string) => {
+        if (!str) return Infinity;
+        const num = parseInt(str);
+        if (str.endsWith('s')) return num;
+        if (str.endsWith('m')) return num * 60;
+        if (str.endsWith('h')) return num * 3600;
+        if (str.endsWith('d')) return num * 86400;
+        return Infinity;
+      };
+      
+      for (const c of relevantContracts) {
+        if (c.min_contract_duration && !c.min_contract_duration.endsWith('t')) {
+          hasTime = true;
+          minTimeSec = Math.min(minTimeSec, parseToSec(c.min_contract_duration));
+        }
+        if (c.max_contract_duration && !c.max_contract_duration.endsWith('t')) {
+          hasTime = true;
+          maxTimeSec = Math.max(maxTimeSec, parseToSec(c.max_contract_duration));
+        }
+      }
+      
+      if (!hasTime) return "Trading is not offered for this duration.";
+      
+      let inputSec = val;
+      if (durationUnit === 'm') inputSec *= 60;
+      else if (durationUnit === 'h') inputSec *= 3600;
+      else if (durationUnit === 'd') inputSec *= 86400;
+      
+      if (inputSec < minTimeSec) {
+        if (minTimeSec < 60) return `Minimum duration is ${minTimeSec} seconds.`;
+        if (minTimeSec < 3600) return `Minimum duration is ${minTimeSec / 60} minutes.`;
+        if (minTimeSec < 86400) return `Minimum duration is ${minTimeSec / 3600} hours.`;
+        return `Minimum duration is ${minTimeSec / 86400} days.`;
+      }
+      
+      if (inputSec > maxTimeSec) {
+        if (maxTimeSec % 86400 === 0) return `Maximum duration is ${maxTimeSec / 86400} days.`;
+        if (maxTimeSec % 3600 === 0) return `Maximum duration is ${maxTimeSec / 3600} hours.`;
+        if (maxTimeSec % 60 === 0) return `Maximum duration is ${maxTimeSec / 60} minutes.`;
+        return `Maximum duration is ${maxTimeSec} seconds.`;
+      }
+      
+      return null;
+    }
+  }, [availableContracts, contractCategory, duration, durationUnit]);
+
   return (
     <Card className="w-full">
       <CardHeader className="pb-3">
@@ -863,6 +957,9 @@ const TradingPanel: React.FC = () => {
         {error && (
           <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
         )}
+        {durationError && !error && (
+          <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{durationError}</div>
+        )}
         
         {/* SL/TP Panel */}
         <div className="grid grid-cols-2 gap-4 pt-2">
@@ -935,11 +1032,11 @@ const TradingPanel: React.FC = () => {
         <div className="grid grid-cols-2 gap-3">
           {contractCategory === "RISE_FALL" && (
             <>
-              <Button variant="profit" size="xl" onClick={() => executeTrade("CALL")} disabled={isTrading || !currentSymbol || isSymbolLoading} className="flex items-center gap-2">
+              <Button variant="profit" size="xl" onClick={() => executeTrade("CALL")} disabled={isTrading || !currentSymbol || isSymbolLoading || !!durationError} className="flex items-center gap-2">
                 {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <TrendingUp className="h-5 w-5" />}
                 <div className="flex flex-col"><span className="text-base font-bold">RISE</span><span className="text-xs opacity-80">Price goes up</span></div>
               </Button>
-              <Button variant="loss" size="xl" onClick={() => executeTrade("PUT")} disabled={isTrading || !currentSymbol || isSymbolLoading} className="flex items-center gap-2">
+              <Button variant="loss" size="xl" onClick={() => executeTrade("PUT")} disabled={isTrading || !currentSymbol || isSymbolLoading || !!durationError} className="flex items-center gap-2">
                 {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <TrendingDown className="h-5 w-5" />}
                 <div className="flex flex-col"><span className="text-base font-bold">FALL</span><span className="text-xs opacity-80">Price goes down</span></div>
               </Button>
@@ -947,11 +1044,11 @@ const TradingPanel: React.FC = () => {
           )}
           {contractCategory === "HIGHER_LOWER" && (
             <>
-              <Button variant="profit" size="xl" onClick={() => executeTrade("CALL")} disabled={isTrading || !currentSymbol || isSymbolLoading} className="flex items-center gap-2">
+              <Button variant="profit" size="xl" onClick={() => executeTrade("CALL")} disabled={isTrading || !currentSymbol || isSymbolLoading || !!durationError} className="flex items-center gap-2">
                 {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <TrendingUp className="h-5 w-5" />}
                 <div className="flex flex-col"><span className="text-base font-bold">HIGHER</span><span className="text-xs opacity-80">Above barrier</span></div>
               </Button>
-              <Button variant="loss" size="xl" onClick={() => executeTrade("PUT")} disabled={isTrading || !currentSymbol || isSymbolLoading} className="flex items-center gap-2">
+              <Button variant="loss" size="xl" onClick={() => executeTrade("PUT")} disabled={isTrading || !currentSymbol || isSymbolLoading || !!durationError} className="flex items-center gap-2">
                 {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <TrendingDown className="h-5 w-5" />}
                 <div className="flex flex-col"><span className="text-base font-bold">LOWER</span><span className="text-xs opacity-80">Below barrier</span></div>
               </Button>
@@ -959,11 +1056,11 @@ const TradingPanel: React.FC = () => {
           )}
           {contractCategory === "TOUCH_NO_TOUCH" && (
             <>
-              <Button variant="profit" size="xl" onClick={() => executeTrade("ONETOUCH")} disabled={isTrading || !currentSymbol || isSymbolLoading} className="flex items-center gap-2">
+              <Button variant="profit" size="xl" onClick={() => executeTrade("ONETOUCH")} disabled={isTrading || !currentSymbol || isSymbolLoading || !!durationError} className="flex items-center gap-2">
                 {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Target className="h-5 w-5" />}
                 <div className="flex flex-col"><span className="text-base font-bold">TOUCH</span><span className="text-xs opacity-80">Touches barrier</span></div>
               </Button>
-              <Button variant="loss" size="xl" onClick={() => executeTrade("NOTOUCH")} disabled={isTrading || !currentSymbol || isSymbolLoading} className="flex items-center gap-2">
+              <Button variant="loss" size="xl" onClick={() => executeTrade("NOTOUCH")} disabled={isTrading || !currentSymbol || isSymbolLoading || !!durationError} className="flex items-center gap-2">
                 {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Target className="h-5 w-5" />}
                 <div className="flex flex-col"><span className="text-base font-bold">NO TOUCH</span><span className="text-xs opacity-80">Won't touch</span></div>
               </Button>
