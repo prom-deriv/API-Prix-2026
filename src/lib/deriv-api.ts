@@ -217,7 +217,7 @@ class DerivAPI {
       if (this.ws) {
         // Reject all pending requests on the old connection to prevent timeout errors
         const error = new Error("Connection replaced")
-        for (const [reqId, { reject }] of this.pendingRequests.entries()) {
+        for (const [, { reject }] of this.pendingRequests.entries()) {
           reject(error)
         }
         this.pendingRequests.clear()
@@ -320,7 +320,7 @@ class DerivAPI {
       if (this.ws) {
         // Reject all pending requests on the old connection to prevent timeout errors
         const error = new Error("Connection replaced")
-        for (const [reqId, { reject }] of this.pendingRequests.entries()) {
+        for (const [, { reject }] of this.pendingRequests.entries()) {
           reject(error)
         }
         this.pendingRequests.clear()

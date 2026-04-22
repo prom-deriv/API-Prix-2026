@@ -281,19 +281,6 @@ function Home() {
       const api = getDerivAPI()
       
       try {
-        // Helper to handle API requests and specifically ignore "Connection replaced" errors
-        const fetchWithRetry = async (fetchFn: () => Promise<any>) => {
-          try {
-            return await fetchFn()
-          } catch (err: any) {
-            if (err.message === "Connection replaced") {
-              console.log("[Home] Ignoring 'Connection replaced' error during initialization")
-              return null
-            }
-            throw err
-          }
-        }
-
         // Fetch appropriate history based on chart style
         if (chartStyle === 'area' || chartStyle === 'line') {
           const history = await api.getTickHistory(symbolToLoad, 1000)
