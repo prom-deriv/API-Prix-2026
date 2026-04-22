@@ -337,6 +337,11 @@ function Home() {
     useEffect(() => {
       const handleAccountConnected = async () => {
         console.log("[Home] Account connected event received, re-subscribing...")
+        
+        // Clear any lingering connection errors (e.g. Request timeout) 
+        // caused by the initial public connection being dropped
+        setConnectionState({ error: null })
+        
         if (currentSymbol) {
           // Force complete cleanup
           await cleanupSubscriptions()
@@ -347,7 +352,7 @@ function Home() {
       
       window.addEventListener('account_connected', handleAccountConnected)
       return () => window.removeEventListener('account_connected', handleAccountConnected)
-    }, [currentSymbol, chartStyle, subscribeToStream, cleanupSubscriptions])
+    }, [currentSymbol, chartStyle, subscribeToStream, cleanupSubscriptions, setConnectionState])
 
     // Handle chart style changes - switch between tick and OHLC streams
     useEffect(() => {
