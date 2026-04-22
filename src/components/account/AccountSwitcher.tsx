@@ -15,6 +15,16 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
   const { accountType, balance, currency, loginId, isConnecting, setAccountType, connectReal, disconnect, resetBalance } = useAccount()
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isResetting, setIsResetting] = useState(false)
+
+  const handleResetBalance = async () => {
+    setIsResetting(true)
+    try {
+      await resetBalance()
+    } finally {
+      setIsResetting(false)
+    }
+  }
 
   const isDemo = accountType === "demo"
 
@@ -211,10 +221,11 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-4 w-4 rounded-full transition-colors hover:bg-muted"
-                        onClick={resetBalance}
+                        className={cn("h-4 w-4 rounded-full transition-colors hover:bg-muted", isResetting && "opacity-50")}
+                        onClick={handleResetBalance}
+                        disabled={isResetting}
                       >
-                        <RotateCcw className="h-3 w-3" />
+                        <RotateCcw className={cn("h-3 w-3", isResetting && "animate-spin")} />
                       </Button>
                       <span className="absolute left-6 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-popover text-popover-foreground text-[10px] px-2 py-1 rounded shadow-md pointer-events-none z-10 border border-border">
                         Reset Balance

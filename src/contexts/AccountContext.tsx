@@ -20,7 +20,7 @@ interface AccountContextType extends AccountInfo {
   updateBalance: (balance: number) => void
   addBalance: (amount: number) => void
   deductBalance: (amount: number) => void
-  resetBalance: () => void
+  resetBalance: () => Promise<void>
   refreshBalance: () => Promise<void>
 }
 
@@ -388,13 +388,6 @@ export function AccountProvider({ children }: AccountProviderProps) {
     }))
   }, [])
 
-  const resetBalance = useCallback(() => {
-    setAccountInfo((prev) => ({
-      ...prev,
-      balance: DEMO_BALANCE,
-    }))
-  }, [])
-
   const refreshBalance = useCallback(async () => {
     if (accountInfo.isConnected) {
       try {
@@ -412,6 +405,35 @@ export function AccountProvider({ children }: AccountProviderProps) {
       }
     }
   }, [accountInfo.accountType, accountInfo.isConnected])
+
+  const resetBalance = useCallback(async () => {
+    // If not connected to a real/demo API session, just reset local state
+    if (!accountInfo.isConnected || !accountInfo.accessToken || !accountInfo.loginId) {
+      setAccountInfo((prev) => ({
+        ...prev,
+        balance: DEMO_BALANCE,
+      }))
+      return
+    }
+
+    try {
+      const api = getDerivAPI()
+      // Only reset if it's a demo account and we have a token
+      if (accountInfo.accountType === "demo") {
+        await api.resetDemoBalance(accountInfo.accessToken, accountInfo.loginId)
+        
+        // After reset, refresh the balance to get the accurate amount from server
+        await refreshBalance()
+      }
+    } catch (err) {
+      console.error("[AccountContext] Failed to reset demo balance:", err)
+      // Fallback to local reset if API fails
+      setAccountInfo((prev) => ({
+        ...prev,
+        balance: DEMO_BALANCE,
+      }))
+    }
+  }, [accountInfo.accountType, accountInfo.accessToken, accountInfo.isConnected, accountInfo.loginId, refreshBalance])
 
   const value: AccountContextType = {
     ...accountInfo,
