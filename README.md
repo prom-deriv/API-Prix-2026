@@ -126,11 +126,11 @@ Create automated trading strategies with:
 
 ## Deployment
 
-### Netlify
+### Vercel
 
 1. Connect your GitHub repository
 2. Build command: `npm run build`
-3. Publish directory: `dist`
+3. Output directory: `dist`
 
 ### Environment Variables
 
