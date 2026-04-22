@@ -15,7 +15,7 @@ interface AccountInfo {
 
 interface AccountContextType extends AccountInfo {
   setAccountType: (type: AccountType) => void
-  connectReal: (accessToken: string) => Promise<void>
+  connectReal: (accessToken: string, targetType?: AccountType) => Promise<void>
   disconnect: () => void
   updateBalance: (balance: number) => void
   addBalance: (amount: number) => void
@@ -100,7 +100,7 @@ export function AccountProvider({ children }: AccountProviderProps) {
     }
   }, [])
 
-  const connectReal = useCallback(async (accessToken: string) => {
+  const connectReal = useCallback(async (accessToken: string, targetType: AccountType = "real") => {
     // Prevent duplicate authentication attempts (race condition fix)
     if (isAuthenticatingRef.current) {
       console.log("[AccountContext] Authentication already in progress, skipping duplicate request")
@@ -108,13 +108,13 @@ export function AccountProvider({ children }: AccountProviderProps) {
     }
     
     isAuthenticatingRef.current = true
-    console.log("[AccountContext] Connecting real account with OAuth...")
+    console.log(`[AccountContext] Connecting ${targetType} account with OAuth...`)
     
     // Store access token
     localStorage.setItem("deriv_access_token", accessToken)
     setAccountInfo((prev) => ({
       ...prev,
-      accountType: "real",
+      accountType: targetType,
       accessToken,
       isConnecting: true,
     }))
@@ -172,22 +172,27 @@ export function AccountProvider({ children }: AccountProviderProps) {
           id: a.account_id, type: a.account_type, currency: a.currency, balance: a.balance
         })));
         
-        const realAccount = 
-          // Priority 1: Non-demo account with USD currency
-          accountsData.data.find((a: any) => a.account_type !== "demo" && a.currency === 'USD') ||
-          // Priority 2: Non-demo account with USD-like currency (case insensitive)
-          accountsData.data.find((a: any) => a.account_type !== "demo" && a.currency?.toUpperCase() === 'USD') ||
-          // Priority 3: CR-prefixed account (legacy V1 format)
-          accountsData.data.find((a: any) => a.account_id?.startsWith('CR')) ||
-          // Priority 4: Any non-demo, non-virtual account
-          accountsData.data.find((a: any) => a.account_type !== "demo" && a.account_type !== "virtual") ||
-          // Priority 5: Any non-demo account
-          accountsData.data.find((a: any) => a.account_type !== "demo") ||
-          // Fallback: first account
-          accountsData.data[0];
-        const accountId = realAccount.account_id;
+        let selectedAccount;
+        if (targetType === "demo") {
+          selectedAccount = accountsData.data.find((a: any) => a.account_type === "demo" || a.account_id?.startsWith('VRTC')) || accountsData.data[0];
+        } else {
+          selectedAccount = 
+            // Priority 1: Non-demo account with USD currency
+            accountsData.data.find((a: any) => a.account_type !== "demo" && a.currency === 'USD') ||
+            // Priority 2: Non-demo account with USD-like currency (case insensitive)
+            accountsData.data.find((a: any) => a.account_type !== "demo" && a.currency?.toUpperCase() === 'USD') ||
+            // Priority 3: CR-prefixed account (legacy V1 format)
+            accountsData.data.find((a: any) => a.account_id?.startsWith('CR')) ||
+            // Priority 4: Any non-demo, non-virtual account
+            accountsData.data.find((a: any) => a.account_type !== "demo" && a.account_type !== "virtual") ||
+            // Priority 5: Any non-demo account
+            accountsData.data.find((a: any) => a.account_type !== "demo") ||
+            // Fallback: first account
+            accountsData.data[0];
+        }
+        const accountId = selectedAccount.account_id;
         
-        console.log(`[AccountContext] Selected account ID: ${accountId} (currency: ${realAccount.currency}), requesting OTP...`);
+        console.log(`[AccountContext] Selected account ID: ${accountId} (currency: ${selectedAccount.currency}), requesting OTP...`);
         
         // 2. Request OTP for the account
         const otpResponse = await fetch(`https://api.derivws.com/trading/v1/options/accounts/${accountId}/otp`, {
@@ -219,27 +224,27 @@ export function AccountProvider({ children }: AccountProviderProps) {
         });
         
         // Trigger event so charts know connection changed
-        window.dispatchEvent(new CustomEvent('account_connected', { detail: { accountType: 'real' } }))
+        window.dispatchEvent(new CustomEvent('account_connected', { detail: { accountType: targetType } }))
         
-        let realAccountLoginId = accountId
-        let realBalance = Number(realAccount.balance) || 0
-        let realCurrency = realAccount.currency || "USD"
+        let accountLoginId = accountId
+        let accountBalance = Number(selectedAccount.balance) || 0
+        let accountCurrency = selectedAccount.currency || "USD"
         
         // Update state with connected account info
         setAccountInfo((prev) => ({
           ...prev,
-          accountType: "real", // Ensure account type is set to real
-          balance: realBalance,
-          currency: realCurrency,
-          loginId: realAccountLoginId,
+          accountType: targetType, // Ensure account type is set properly
+          balance: accountBalance,
+          currency: accountCurrency,
+          loginId: accountLoginId,
           isConnected: true,
           isConnecting: false,
         }))
         
-        console.log("[AccountContext] ✅ State updated - Real account connected:", {
-          loginId: realAccountLoginId,
-          balance: realBalance,
-          currency: realCurrency
+        console.log(`[AccountContext] ✅ State updated - ${targetType} account connected:`, {
+          loginId: accountLoginId,
+          balance: accountBalance,
+          currency: accountCurrency
         })
         
         // Subscribe to balance updates to keep UI in sync with real-time changes
@@ -304,62 +309,72 @@ export function AccountProvider({ children }: AccountProviderProps) {
     throw lastError || new Error("Authentication failed")
   }, [disconnect])
 
-  // Set up event handlers for real account
+  // Set up event handlers for accounts
   useEffect(() => {
-    if (accountInfo.accountType === "real") {
-      const api = getDerivAPI()
+    const api = getDerivAPI()
 
-      // Set up authorize response handler
+    // Set up authorize response handler
+    if (!authorizeHandlerRef.current) {
       authorizeHandlerRef.current = api.on("authorize", handleAuthorize)
+    }
 
     // Auto-reconnect if we have a valid token but aren't connected
     const storedToken = localStorage.getItem("deriv_access_token")
     if (storedToken && storedToken !== "undefined" && storedToken !== "null" && !accountInfo.isConnected && !accountInfo.isConnecting) {
-      console.log("[AccountContext] Found valid stored token, auto-reconnecting...")
-      connectReal(storedToken).catch(err => {
-        console.error("[AccountContext] Auto-reconnect failed, falling back to demo:", err)
+      console.log(`[AccountContext] Found valid stored token, auto-reconnecting to ${accountInfo.accountType}...`)
+      connectReal(storedToken, accountInfo.accountType).catch(err => {
+        console.error("[AccountContext] Auto-reconnect failed, falling back to demo mock:", err)
         disconnect()
       })
     } else if (accountInfo.isConnected) {
       // Trigger an event so other components know connection is restored
-      window.dispatchEvent(new CustomEvent('account_connected', { detail: { accountType: 'real' } }))
-    } else {
-      // Skip balance fetch on public endpoint - it requires authentication
-      // Balance will be fetched when user connects via OAuth
-      console.log("[AccountContext] Real account selected - waiting for OAuth authentication")
+      window.dispatchEvent(new CustomEvent('account_connected', { detail: { accountType: accountInfo.accountType } }))
     }
 
     return () => {
-        // Clean up handlers
-        if (authorizeHandlerRef.current) {
-          api.off("authorize", authorizeHandlerRef.current)
-          authorizeHandlerRef.current = null
-        }
+      // Clean up handlers on unmount
+      if (authorizeHandlerRef.current) {
+        api.off("authorize", authorizeHandlerRef.current)
+        authorizeHandlerRef.current = null
       }
     }
-  }, [accountInfo.accountType, accountInfo.isConnected, accountInfo.isConnecting, connectReal, disconnect, handleBalanceUpdate, handleAuthorize])
+  }, [accountInfo.accountType, accountInfo.isConnected, accountInfo.isConnecting, connectReal, disconnect, handleAuthorize])
 
   const setAccountType = useCallback((type: AccountType) => {
-    if (type === "demo") {
-      // Reset to demo account
-      localStorage.setItem("account_type", "demo")
-      setAccountInfo({
-        accountType: "demo",
-        balance: DEMO_BALANCE,
-        currency: DEMO_CURRENCY,
-        loginId: DEMO_LOGIN_ID,
-        isConnected: false,
-        isConnecting: false,
-        accessToken: null,
-      })
-    } else {
-      // Switch to real - will trigger OAuth flow
-      setAccountInfo((prev) => ({
-        ...prev,
-        isConnecting: true,
-      }))
-    }
     localStorage.setItem("account_type", type)
+    setAccountInfo((prev) => {
+      const token = prev.accessToken || localStorage.getItem("deriv_access_token");
+      
+      if (token && token !== "undefined" && token !== "null") {
+        // We have a token, we should reconnect to the chosen account type via API
+        // The useEffect will pick up the disconnected state and reconnect
+        return {
+          ...prev,
+          accountType: type,
+          isConnected: false,
+          isConnecting: false,
+        }
+      }
+      
+      // No token fallback
+      if (type === "demo") {
+        return {
+          accountType: "demo",
+          balance: DEMO_BALANCE,
+          currency: DEMO_CURRENCY,
+          loginId: DEMO_LOGIN_ID,
+          isConnected: false,
+          isConnecting: false,
+          accessToken: null,
+        }
+      } else {
+        return {
+          ...prev,
+          accountType: "real",
+          isConnecting: true, // Will trigger OAuth flow
+        }
+      }
+    })
   }, [])
 
   const updateBalance = useCallback((newBalance: number) => {
@@ -391,7 +406,7 @@ export function AccountProvider({ children }: AccountProviderProps) {
   }, [])
 
   const refreshBalance = useCallback(async () => {
-    if (accountInfo.accountType === 'real') {
+    if (accountInfo.isConnected) {
       try {
         const api = getDerivAPI()
         const balanceData = await api.getBalance()

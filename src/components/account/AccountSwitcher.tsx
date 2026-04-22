@@ -204,7 +204,7 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
             {isDemo ? (
               <p className="flex items-center gap-1.5">
                 <User className="h-3 w-3" />
-                Demo Account
+                {loginId && loginId !== "Demo Account" ? `Demo Account: ${loginId}` : "Demo Account"}
               </p>
             ) : (
               <p className="flex items-center gap-1.5">
@@ -223,7 +223,8 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
 
           {/* Action Buttons */}
           <div className="flex gap-2">
-            {isDemo ? (
+            {/* Show connect button only if NOT connected via token */}
+            {(!localStorage.getItem("deriv_access_token")) ? (
               <Button
                 variant="default"
                 size="sm"
@@ -251,7 +252,7 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
                 className="w-full text-xs gap-1.5"
               >
                 <LogOut className="h-3.5 w-3.5" />
-                Switch to Demo
+                Disconnect
               </Button>
             )}
           </div>
