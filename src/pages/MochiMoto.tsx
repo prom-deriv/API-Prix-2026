@@ -507,7 +507,8 @@ function GhostProviderWithAccount({ children }: { children: React.ReactNode }) {
   return (
     <GhostProvider onTradeSettle={(profit) => {
       // For real accounts, we manually refresh the balance to see it immediately
-      if (accountType === "real") {
+      const isConnectedDemo = localStorage.getItem("deriv_access_token") && localStorage.getItem("deriv_access_token") !== "null";
+      if (accountType === "real" || (accountType === "demo" && isConnectedDemo)) {
         refreshBalance()
         return
       }

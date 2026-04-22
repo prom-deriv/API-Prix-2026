@@ -469,11 +469,13 @@ const TradingPanel: React.FC = () => {
     
     setIsTrading(true)
     try {
-      if (accountType === "demo") {
-        // Demo mode: simulate trade immediately without API proposal
+      // Access token presence is a good proxy for whether we should use real API or local mock
+      const isConnectedDemo = localStorage.getItem("deriv_access_token") && localStorage.getItem("deriv_access_token") !== "null";
+      if (accountType === "demo" && !isConnectedDemo) {
+        // Mock demo mode: simulate trade immediately without API proposal
         await simulateDemoTrade(contractType)
       } else {
-        // Real mode: fetch proposal if needed, then buy
+        // Real or Connected Demo mode: fetch proposal if needed, then buy
         let currentProposal = proposal
         if (!currentProposal) {
           const api = getDerivAPI()

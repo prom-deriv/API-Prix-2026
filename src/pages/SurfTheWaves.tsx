@@ -558,6 +558,16 @@ function SurfTheWavesContent() {
         soundMgr.playSessionStart()
       } catch (err) {
         console.error("Failed to execute real surf trade", err)
+        const isConnectedDemo = localStorage.getItem("deriv_access_token") && localStorage.getItem("deriv_access_token") !== "null";
+        if (accountType === "real" || (accountType === "demo" && isConnectedDemo)) {
+          const api = getDerivAPI()
+          // Update balance directly after a failure to ensure correctness
+          api.getBalance().then(res => {
+            if (res?.balance !== undefined) {
+              refreshBalance()
+            }
+          }).catch(console.error)
+        }
       }
     }
   }
