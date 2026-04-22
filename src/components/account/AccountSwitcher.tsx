@@ -2,7 +2,8 @@ import React, { useEffect, useCallback, useState } from "react"
 import { Button } from "../ui/button"
 import { Card, CardContent } from "../ui/card"
 import { useAccount } from "../../contexts/AccountContext"
-import { Wallet, LogOut, User, ShieldCheck, Loader2, RotateCcw } from "lucide-react"
+import { getDerivAPI } from "../../lib/deriv-api"
+import { Wallet, LogOut, User, ShieldCheck, Loader2, RotateCcw, ArrowDownToLine, ArrowUpFromLine } from "lucide-react"
 import { formatCurrency } from "../../lib/utils"
 import { cn } from "../../lib/utils"
 
@@ -13,8 +14,37 @@ interface AccountSwitcherProps {
 const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
   const { accountType, balance, currency, loginId, isConnecting, setAccountType, connectReal, disconnect, resetBalance } = useAccount()
   const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
   const isDemo = accountType === "demo"
+
+  const handleDeposit = async () => {
+    if (isDemo) return
+    setIsLoading(true)
+    try {
+      const api = getDerivAPI()
+      const url = await api.deposit()
+      window.open(url, "_blank", "noopener,noreferrer")
+    } catch (err) {
+      console.error("Failed to open deposit page", err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleWithdraw = async () => {
+    if (isDemo) return
+    setIsLoading(true)
+    try {
+      const api = getDerivAPI()
+      const url = await api.withdraw()
+      window.open(url, "_blank", "noopener,noreferrer")
+    } catch (err) {
+      console.error("Failed to open withdrawal page", err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Check for Classic OAuth implicit callback on mount
   useEffect(() => {
@@ -197,6 +227,32 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
                 </p>
               </div>
             </div>
+            {!isDemo && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="profit"
+                  size="sm"
+                  onClick={handleDeposit}
+                  disabled={isLoading}
+                  className="flex items-center gap-1 h-8 px-2"
+                  title="Deposit"
+                >
+                  {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowDownToLine className="h-3 w-3" />}
+                  <span className="text-xs font-bold">Deposit</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleWithdraw}
+                  disabled={isLoading}
+                  className="flex items-center gap-1 h-8 px-2"
+                  title="Withdraw"
+                >
+                  {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowUpFromLine className="h-3 w-3" />}
+                  <span className="text-xs font-bold">Withdraw</span>
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Account Details */}

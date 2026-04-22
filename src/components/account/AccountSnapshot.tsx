@@ -1,18 +1,14 @@
 import React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
-import { Button } from "../ui/button"
 import { useTradingStore } from "../../stores/tradingStore"
 import { useAccount } from "../../contexts/AccountContext"
 import { formatCurrency, formatPercentage } from "../../lib/utils"
-import { getDerivAPI } from "../../lib/deriv-api"
-import { Wallet, TrendingUp, TrendingDown, Activity, ShieldCheck, User, ArrowDownToLine, ArrowUpFromLine, Loader2 } from "lucide-react"
+import { Wallet, TrendingUp, TrendingDown, Activity, ShieldCheck, User } from "lucide-react"
 import { cn } from "../../lib/utils"
-import { useState } from "react"
 
 const AccountSnapshot: React.FC = () => {
   const { activeContracts, recentTrades } = useTradingStore()
   const { accountType, balance, currency } = useAccount()
-  const [isLoading, setIsLoading] = useState(false)
 
   const totalProfit = recentTrades.reduce((sum, trade) => sum + trade.profit, 0)
   const winRate = recentTrades.length > 0
@@ -22,34 +18,6 @@ const AccountSnapshot: React.FC = () => {
   const activePnL = activeContracts.reduce((sum, contract) => sum + contract.profit, 0)
 
   const isDemo = accountType === "demo"
-
-  const handleDeposit = async () => {
-    if (isDemo) return
-    setIsLoading(true)
-    try {
-      const api = getDerivAPI()
-      const url = await api.deposit()
-      window.open(url, "_blank", "noopener,noreferrer")
-    } catch (err) {
-      console.error("Failed to open deposit page", err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleWithdraw = async () => {
-    if (isDemo) return
-    setIsLoading(true)
-    try {
-      const api = getDerivAPI()
-      const url = await api.withdraw()
-      window.open(url, "_blank", "noopener,noreferrer")
-    } catch (err) {
-      console.error("Failed to open withdrawal page", err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   return (
     <Card>
@@ -73,41 +41,13 @@ const AccountSnapshot: React.FC = () => {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Balance Display */}
-        <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">
-              {isDemo ? "Demo Balance" : "Real Balance"}
-            </p>
-            <p className="text-2xl font-bold">
-              {formatCurrency(balance, currency || "USD")}
-            </p>
-          </div>
-          {!isDemo && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="profit"
-                size="sm"
-                onClick={handleDeposit}
-                disabled={isLoading}
-                className="flex items-center gap-1 h-8 px-2"
-                title="Deposit"
-              >
-                {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowDownToLine className="h-3 w-3" />}
-                <span className="text-xs font-bold">Deposit</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleWithdraw}
-                disabled={isLoading}
-                className="flex items-center gap-1 h-8 px-2"
-                title="Withdraw"
-              >
-                {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowUpFromLine className="h-3 w-3" />}
-                <span className="text-xs font-bold">Withdraw</span>
-              </Button>
-            </div>
-          )}
+        <div className="p-3 rounded-lg bg-muted/50">
+          <p className="text-xs text-muted-foreground mb-1">
+            {isDemo ? "Demo Balance" : "Real Balance"}
+          </p>
+          <p className="text-2xl font-bold">
+            {formatCurrency(balance, currency || "USD")}
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
