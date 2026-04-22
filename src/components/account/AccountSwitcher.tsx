@@ -319,7 +319,7 @@ const AccountSwitcher: React.FC<AccountSwitcherProps> = ({ className }) => {
                 className="w-full text-xs gap-1.5"
               >
                 <LogOut className="h-3.5 w-3.5" />
-                Disconnect
+                Disconnect/Log out
               </Button>
             )}
           </div>
