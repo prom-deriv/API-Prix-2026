@@ -5,8 +5,39 @@ import { Button } from "../ui/button"
 import { getDerivAPI } from "../../lib/deriv-api"
 import { TrendingUp, TrendingDown, X, DollarSign, Clock } from "lucide-react"
 
-const formatTimeLeft = (expiry: number) => {
+const formatTimeLeft = (expiry: number, unit?: string, duration?: number, startTime?: number) => {
   const now = Math.floor(Date.now() / 1000)
+  
+  if (unit && duration && startTime) {
+    const elapsed = now - startTime
+    let remainingUnitValue = 0
+    let unitLabel = ""
+
+    switch (unit) {
+      case "s":
+        remainingUnitValue = Math.max(0, duration - elapsed)
+        unitLabel = "s"
+        break
+      case "m":
+        remainingUnitValue = Math.max(0, duration - Math.floor(elapsed / 60))
+        unitLabel = "m"
+        break
+      case "h":
+        remainingUnitValue = Math.max(0, duration - Math.floor(elapsed / 3600))
+        unitLabel = "h"
+        break
+      case "d":
+        remainingUnitValue = Math.max(0, duration - Math.floor(elapsed / 86400))
+        unitLabel = "d"
+        break
+    }
+
+    if (unitLabel) {
+      return `${remainingUnitValue}${unitLabel} left`
+    }
+  }
+
+  // Fallback to standard expiry countdown if unit/duration info is missing or invalid
   const diff = Math.max(0, expiry - now)
   if (diff === 0) return "00:00"
   const h = Math.floor(diff / 3600)
@@ -149,12 +180,12 @@ export default function ActiveContractsPanel() {
                       contract.duration_unit === "t" && contract.duration ? (
                         <div className="flex items-center gap-1.5 text-xs font-mono bg-background/50 border px-2 py-1 rounded shadow-sm text-muted-foreground">
                           <Clock className="w-3 h-3" />
-                          {Math.max(0, contract.duration - (contract.audit?.all_ticks?.length || 0))} Ticks
+                          {Math.max(0, contract.duration - (contract.audit?.all_ticks?.length || 0))} Ticks left
                         </div>
                       ) : contract.date_expiry ? (
                         <div className="flex items-center gap-1.5 text-xs font-mono bg-background/50 border px-2 py-1 rounded shadow-sm text-muted-foreground">
                           <Clock className="w-3 h-3" />
-                          {formatTimeLeft(contract.date_expiry)}
+                          {formatTimeLeft(contract.date_expiry, contract.duration_unit, contract.duration, contract.date_start)}
                         </div>
                       ) : null
                     )}
