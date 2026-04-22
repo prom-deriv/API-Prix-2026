@@ -208,8 +208,18 @@ export default function ActiveContractsPanel() {
                       contract.duration_unit === "t" && contract.duration ? (
                         <div className="flex items-center gap-1.5 text-xs font-mono bg-background/50 border px-2 py-1 rounded shadow-sm text-muted-foreground">
                           <Clock className="w-3 h-3" />
-                          {/* Live Ticks Countdown: Estimating 1 tick = 1 second for live visual decrement */}
-                          {Math.max(0, contract.duration - ((contract as any).tick_count || (contract.audit as any)?.tick_count || contract.audit?.all_ticks?.length || Math.floor((Date.now() / 1000) - contract.date_start)))} Ticks left
+                          {/* Live Ticks Countdown: Use real ticks if available, otherwise estimate for mock offline demo */}
+                          {(() => {
+                            let passedTicks = 0;
+                            if (contract.tick_count !== undefined) {
+                              passedTicks = contract.tick_count;
+                            } else if (contract.audit?.all_ticks?.length) {
+                              passedTicks = contract.audit.all_ticks.length;
+                            } else if (contract.shortcode.includes("_demo_")) {
+                              passedTicks = Math.floor((Date.now() / 1000) - contract.date_start);
+                            }
+                            return `${Math.max(0, contract.duration - passedTicks)} Ticks left`;
+                          })()}
                         </div>
                       ) : contract.date_expiry ? (
                         <div className="flex items-center gap-1.5 text-xs font-mono bg-background/50 border px-2 py-1 rounded shadow-sm text-muted-foreground">

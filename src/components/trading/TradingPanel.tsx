@@ -656,6 +656,8 @@ const TradingPanel: React.FC = () => {
                 buy_price: contract.buy_price,
                 expiry_time: contract.expiry_time,
                 is_expired: contract.is_expired,
+                tick_count: contract.tick_count,
+                audit: contract.audit,
               })
 
               // Check SL/TP

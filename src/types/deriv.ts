@@ -182,6 +182,7 @@ export interface ProposalOpenContract {
   underlying: string
   duration?: number
   duration_unit?: string
+  tick_count?: number
 }
 
 export interface ProposalOpenContractResponse {
