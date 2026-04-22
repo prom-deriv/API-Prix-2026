@@ -411,7 +411,7 @@ export function AccountProvider({ children }: AccountProviderProps) {
         console.error('[AccountContext] Failed to manually refresh balance', err)
       }
     }
-  }, [accountInfo.accountType])
+  }, [accountInfo.accountType, accountInfo.isConnected])
 
   const value: AccountContextType = {
     ...accountInfo,

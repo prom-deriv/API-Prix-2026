@@ -509,7 +509,8 @@ function SurfTheWavesContent() {
           const buyResult = await api.buyContract(proposal.id, proposal.ask_price)
           
           if (buyResult?.contract_id) {
-            if (accountType === "demo") {
+            const isConnectedDemo = localStorage.getItem("deriv_access_token") && localStorage.getItem("deriv_access_token") !== "null";
+            if (accountType === "demo" && !isConnectedDemo) {
                deductBalance(setup.stake)
             }
             refreshBalance()

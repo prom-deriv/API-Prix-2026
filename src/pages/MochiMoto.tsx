@@ -484,7 +484,8 @@ function MochiMotoContent() {
         {/* Ghost Trading Panel */}
         <div className="absolute bottom-4 right-4 z-40 w-96">
           <GhostTradingPanel onTradeStart={(amount) => {
-            if (accountType === "demo") {
+            const isConnectedDemo = localStorage.getItem("deriv_access_token") && localStorage.getItem("deriv_access_token") !== "null";
+            if (accountType === "demo" && !isConnectedDemo) {
                deductBalance(amount)
             }
           }} />
