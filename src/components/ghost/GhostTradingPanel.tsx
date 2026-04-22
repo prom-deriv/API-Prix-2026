@@ -31,7 +31,7 @@ export interface GhostTradingPanelProps {
 const GhostTradingPanel: React.FC<GhostTradingPanelProps> = ({ onTradeStart }) => {
   const [isExpanded, setIsExpanded] = useState(true)
   const { currentSymbol, currentTick, addDerivPoints } = useTradingStore()
-  const { balance, accountType, refreshBalance } = useAccount()
+  const { balance, accountType, loginId, refreshBalance } = useAccount()
   const { addGhostTrade, settleGhostTrade, activeGhostTrade, mascotEmotion } = useGhost()
   
   const [amount, setAmount] = useState<string>("10")
@@ -74,6 +74,11 @@ const GhostTradingPanel: React.FC<GhostTradingPanelProps> = ({ onTradeStart }) =
 
     return () => clearInterval(interval)
   }, [activeGhostTrade, currentTick, settleGhostTrade])
+
+  // Clear error when account changes
+  useEffect(() => {
+    setError(null)
+  }, [accountType, loginId])
 
   // Reset mascot emotion after 3 seconds
   useEffect(() => {

@@ -42,7 +42,7 @@ const TradingPanel: React.FC = () => {
     symbols,
     isSymbolLoading,
   } = useTradingStore()
-  const { accountType, balance: accountBalance, updateBalance, deductBalance } = useAccount()
+  const { accountType, loginId, balance: accountBalance, updateBalance, deductBalance } = useAccount()
   const [amount, setAmount] = useState<string>("10")
   const [duration, setDuration] = useState<string>("5")
   const [durationUnit, setDurationUnit] = useState<DurationUnit>("t")
@@ -84,6 +84,12 @@ const TradingPanel: React.FC = () => {
       setPipSize(resolvedPipSize)
     }
   }, [resolvedPipSize, setPipSize])
+
+  // Clear error and proposal when account changes
+  useEffect(() => {
+    setError(null)
+    setProposal(null)
+  }, [accountType, loginId])
 
   // Fetch contracts_for data when symbol changes
   useEffect(() => {
