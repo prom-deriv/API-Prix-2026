@@ -134,14 +134,20 @@ export const useTradingStore = create<TradingState>()(
   // Actions
   setSymbols: (symbols) => set({ symbols }),
 
-  setCurrentSymbol: (symbol) => set({
-    currentSymbol: symbol,
-    tickHistory: [],
-    currentTick: null,
-    totalTicksReceived: 0,
-    ohlcHistory: [],
-    currentOHLC: null,
-  }),
+  setCurrentSymbol: (symbol) => {
+    // Check if the symbol is actually changing to prevent unnecessary resets
+    const current = get().currentSymbol;
+    if (current === symbol) return;
+    
+    set({
+      currentSymbol: symbol,
+      tickHistory: [],
+      currentTick: null,
+      totalTicksReceived: 0,
+      ohlcHistory: [],
+      currentOHLC: null,
+    })
+  },
 
   setIsSymbolLoading: (loading) => set({ isSymbolLoading: loading }),
 

@@ -594,20 +594,35 @@ const TradingPanel: React.FC = () => {
           
           const unsubscribe = api.subscribeProposalOpenContract(buyResult.contract_id, (contract) => {
             if (contract.is_sold === 1 || contract.is_expired === 1 || ["sold", "won", "lost"].includes(contract.status || "")) {
-              // Contract settled — do NOT manually update balance here.
-              // The balance subscription (subscribeBalance) handles real-time
-              // balance updates from the server, which is the authoritative source.
-              // Manual calculation causes $NaN due to stale closures and string values.
               const profit = Number(contract.profit) || 0
               
+              // Optimistically update balance immediately if profitable (won/sold at profit)
+              // The stake was already deducted from balance at purchase.
+              // If we win, the balance should increase by (Stake + Profit), which is Payout.
+              // Wait, if balance currently reflects the post-purchase amount,
+              // then on win, we just add the (Profit + Stake).
+              // Let's use the exact contract payout if won, or profit if sold early.
+              if (contract.status === "won" && contract.payout) {
+                updateBalance(accountBalance + Number(contract.payout));
+              } else if (contract.status === "sold" && profit > 0 && contract.buy_price) {
+                 // Sold early at a profit: add back the current bid price which is Stake + Profit
+                 updateBalance(accountBalance + Number(contract.bid_price || (contract.buy_price + profit)));
+              }
+              // We rely on `refreshBalance` and `subscribeBalance` to correct it if the optimistic update is slightly off.
+
               // Remove from active contracts
               removeActiveContract(buyResult.contract_id)
               
-              // Fetch real balance immediately after settlement
+              // Fetch real balance after settlement
               // Add a small delay to ensure the backend has processed the balance update
+              // Also add a second refresh a bit later to be absolutely sure
               setTimeout(() => {
                 refreshBalance().catch(console.error)
               }, 500)
+              
+              setTimeout(() => {
+                refreshBalance().catch(console.error)
+              }, 2000)
 
               // Add Deriv Points for real trade
               const stakeAmount = contract.buy_price || parseFloat(amount)

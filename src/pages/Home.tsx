@@ -40,6 +40,7 @@ function Home() {
     setCurrentOHLC,
     setOHLCHistory,
     setConnectionState,
+    isSymbolLoading,
     setIsSymbolLoading,
     fetchSymbols,
     clearState,
@@ -271,6 +272,9 @@ function Home() {
     if (!hasInitializedRef.current) return
     if (!isConnected) return
     
+    // Check if we're already processing this exact symbol to avoid redundant API calls
+    if (loadingSymbolRef.current === currentSymbol && !isSymbolLoading) return
+    
     const handleSymbolChange = async () => {
       const symbolToLoad = currentSymbol
       loadingSymbolRef.current = symbolToLoad
@@ -278,6 +282,9 @@ function Home() {
       
       // Clean up ALL previous subscriptions (handlers + API)
       await cleanupSubscriptions()
+      
+      // Wait a tiny bit to ensure WebSocket state settles after unsubscribe
+      await new Promise(resolve => setTimeout(resolve, 100))
       
       // Check if we're still loading the same symbol
       if (loadingSymbolRef.current !== symbolToLoad) {
