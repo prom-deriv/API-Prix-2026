@@ -593,7 +593,7 @@ const TradingPanel: React.FC = () => {
           })
           
           const unsubscribe = api.subscribeProposalOpenContract(buyResult.contract_id, (contract) => {
-            if (contract.is_sold === 1 || contract.status === "sold") {
+            if (contract.is_sold === 1 || contract.is_expired === 1 || ["sold", "won", "lost"].includes(contract.status || "")) {
               // Contract settled — do NOT manually update balance here.
               // The balance subscription (subscribeBalance) handles real-time
               // balance updates from the server, which is the authoritative source.
@@ -623,16 +623,16 @@ const TradingPanel: React.FC = () => {
                 buy_price: contract.buy_price || parseFloat(amount),
                 contract_id: contract.contract_id,
                 contract_type: contract.contract_type || contractType,
-                currency: "USD",
+                currency: contract.currency || "USD",
                 date_expiry: contract.date_expiry || 0,
                 date_start: contract.date_start || 0,
                 longcode: contract.longcode || "",
                 payout: contract.payout || 0,
                 profit,
                 sell_price: contract.sell_price || 0,
-                sell_time: contract.sell_spot_time || 0,
+                sell_time: contract.sell_spot_time || contract.date_expiry || (Date.now() / 1000),
                 shortcode: contract.shortcode || "",
-                transaction_id: buyResult.transaction_id || 0,
+                transaction_id: buyResult.transaction_id || contract.transaction_ids?.buy || 0,
                 entry_tick: contract.entry_spot,
                 exit_tick: contract.sell_spot || contract.current_spot,
                 entry_tick_display_value: contract.entry_spot_display_value,

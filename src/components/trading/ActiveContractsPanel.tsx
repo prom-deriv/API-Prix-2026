@@ -119,19 +119,23 @@ export default function ActiveContractsPanel() {
       if (contract) {
         addRecentTrade({
           app_id: import.meta.env.VITE_DERIV_APP_ID || "1089",
-          buy_price: contract.buy_price,
+          buy_price: contract.buy_price || 0,
           contract_id: contractId,
           contract_type: contract.contract_type,
-          currency: contract.currency,
-          date_expiry: contract.date_expiry,
-          date_start: contract.date_start,
-          longcode: contract.longcode,
-          payout: contract.payout,
-          profit: contract.profit,
-          sell_price: result.sold_for,
+          currency: contract.currency || "USD",
+          date_expiry: contract.date_expiry || 0,
+          date_start: contract.date_start || 0,
+          longcode: contract.longcode || "",
+          payout: contract.payout || 0,
+          profit: contract.profit || 0,
+          sell_price: result.sold_for || contract.bid_price || 0,
           sell_time: Date.now() / 1000,
-          shortcode: contract.shortcode,
-          transaction_id: result.transaction_id,
+          shortcode: contract.shortcode || "",
+          transaction_id: result.transaction_id || contract.transaction_ids?.buy || 0,
+          entry_tick: contract.entry_spot,
+          exit_tick: contract.current_spot,
+          entry_tick_display_value: contract.entry_spot_display_value,
+          exit_tick_display_value: contract.current_spot_display_value,
         })
       }
       

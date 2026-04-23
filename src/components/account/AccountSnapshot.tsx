@@ -10,12 +10,12 @@ const AccountSnapshot: React.FC = () => {
   const { activeContracts, recentTrades } = useTradingStore()
   const { accountType, balance, currency } = useAccount()
 
-  const totalProfit = recentTrades.reduce((sum, trade) => sum + trade.profit, 0)
+  const totalProfit = recentTrades.reduce((sum, trade) => sum + (Number(trade.profit) || 0), 0)
   const winRate = recentTrades.length > 0
-    ? (recentTrades.filter((t) => t.profit > 0).length / recentTrades.length) * 100
+    ? (recentTrades.filter((t) => (Number(t.profit) || 0) > 0).length / recentTrades.length) * 100
     : 0
 
-  const activePnL = activeContracts.reduce((sum, contract) => sum + contract.profit, 0)
+  const activePnL = activeContracts.reduce((sum, contract) => sum + (Number(contract.profit) || 0), 0)
 
   const isDemo = accountType === "demo"
 
@@ -107,10 +107,10 @@ const AccountSnapshot: React.FC = () => {
                   </div>
                   <span
                     className={`text-sm font-medium ${
-                      contract.profit >= 0 ? "text-profit" : "text-loss"
+                      (Number(contract.profit) || 0) >= 0 ? "text-profit" : "text-loss"
                     }`}
                   >
-                    {formatCurrency(contract.profit)}
+                    {formatCurrency(Number(contract.profit) || 0)}
                   </span>
                 </div>
               ))}
@@ -139,10 +139,10 @@ const AccountSnapshot: React.FC = () => {
                   </div>
                   <span
                     className={`text-sm font-medium ${
-                      trade.profit >= 0 ? "text-profit" : "text-loss"
+                      (Number(trade.profit) || 0) >= 0 ? "text-profit" : "text-loss"
                     }`}
                   >
-                    {formatCurrency(trade.profit)}
+                    {formatCurrency(Number(trade.profit) || 0)}
                   </span>
                 </div>
               ))}
