@@ -10,6 +10,7 @@ import SocialTrading from "../components/social/SocialTrading"
 import AccountSnapshot from "../components/account/AccountSnapshot"
 import AccountSwitcher from "../components/account/AccountSwitcher"
 import DerivPoints from "../components/trading/DerivPoints"
+import DerivGiftCard from "../components/trading/DerivGiftCard"
 import AssetSelector from "../components/trading/AssetSelector"
 import ChartStyleSelector from "../components/charts/ChartStyleSelector"
 import ErrorBoundary from "../components/ui/ErrorBoundary"
@@ -565,6 +566,7 @@ function Home() {
             <div className="flex flex-col gap-4">
               <ActiveContractsPanel />
               <DerivPoints />
+              <DerivGiftCard />
             </div>
 
              <AlertSystem />
