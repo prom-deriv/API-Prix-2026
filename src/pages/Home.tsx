@@ -97,6 +97,9 @@ function Home() {
         }
         tickUnsubscribeRef.current = await api.subscribeTicks(symbol, (tick) => {
           if (loadingSymbolRef.current === symbol || loadingSymbolRef.current === null) {
+            // STRICT FILTERING: Only process ticks for the currently requested symbol
+            if (tick.symbol !== symbol) return;
+
             // NUMERIC VALIDATION - Prevent chart freeze from non-Number values
             const quote = Number(tick.quote)
             const epoch = Number(tick.epoch)
@@ -115,6 +118,9 @@ function Home() {
         }
         ohlcUnsubscribeRef.current = await api.subscribeOHLC(symbol, 60, (ohlc) => {
           if (loadingSymbolRef.current === symbol || loadingSymbolRef.current === null) {
+            // STRICT FILTERING: Only process OHLC for the currently requested symbol
+            if (ohlc.symbol !== symbol) return;
+
             // NUMERIC VALIDATION - Prevent chart freeze from non-Number values
             const open = Number(ohlc.open)
             const high = Number(ohlc.high)

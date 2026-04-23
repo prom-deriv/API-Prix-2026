@@ -42,7 +42,7 @@ const TradingPanel: React.FC = () => {
     symbols,
     isSymbolLoading,
   } = useTradingStore()
-  const { accountType, loginId, balance: accountBalance, updateBalance, deductBalance } = useAccount()
+  const { accountType, loginId, balance: accountBalance, updateBalance, deductBalance, refreshBalance } = useAccount()
   const [amount, setAmount] = useState<string>("10")
   const [duration, setDuration] = useState<string>("5")
   const [durationUnit, setDurationUnit] = useState<DurationUnit>("t")
@@ -604,11 +604,10 @@ const TradingPanel: React.FC = () => {
               removeActiveContract(buyResult.contract_id)
               
               // Fetch real balance immediately after settlement
-              api.getBalance().then((balanceRes) => {
-                if (balanceRes && balanceRes.balance !== undefined) {
-                  updateBalance(Number(balanceRes.balance))
-                }
-              }).catch(console.error)
+              // Add a small delay to ensure the backend has processed the balance update
+              setTimeout(() => {
+                refreshBalance().catch(console.error)
+              }, 500)
 
               // Add Deriv Points for real trade
               const stakeAmount = contract.buy_price || parseFloat(amount)

@@ -239,11 +239,11 @@ export default function ActiveContractsPanel() {
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground text-xs">Entry Price</p>
-                    <p className="font-semibold tabular-nums">{contract.entry_spot_display_value}</p>
+                    <p className="font-semibold tabular-nums">{contract.entry_spot_display_value || contract.entry_spot || "-"}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs">Current Price</p>
-                    <p className="font-semibold tabular-nums">{contract.current_spot_display_value}</p>
+                    <p className="font-semibold tabular-nums">{contract.current_spot_display_value || contract.current_spot || "-"}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs">Buy Price</p>
