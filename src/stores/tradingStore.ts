@@ -265,23 +265,15 @@ export const useTradingStore = create<TradingState>()(
   setOHLCHistory: (history) => set({ ohlcHistory: history }),
 
   setChartStyle: (style) => {
-    // Only reset state if changing from tick to OHLC or vice versa
-    // This allows smooth transitions between Area <-> Line and OHLC <-> Candlestick
-    const state = get()
-    const isTickCurrent = state.chartStyle === 'area' || state.chartStyle === 'line'
-    const isTickNew = style === 'area' || style === 'line'
-    
-    if (isTickCurrent !== isTickNew) {
-      set({
-        chartStyle: style,
-        tickHistory: [],
-        ohlcHistory: [],
-        currentTick: null,
-        currentOHLC: null
-      })
-    } else {
-      set({ chartStyle: style })
-    }
+    // NOTE: We intentionally do NOT wipe tickHistory/ohlcHistory here.
+    // History arrays are keyed by the CURRENT symbol, not by chart style,
+    // so they remain valid when the user only switches how the data is
+    // visualised (Area <-> Line <-> OHLC <-> Candlestick). Wiping them
+    // would cause the chart to briefly render from a single live tick,
+    // making it look like it "starts from 0" until the async re-fetch
+    // completes. History is still reset when the symbol changes
+    // (see setCurrentSymbol) which is the correct trigger.
+    set({ chartStyle: style })
   },
 
   setConnectionState: (connectionState) => set((state) => ({

@@ -385,9 +385,11 @@ function Home() {
       // Clean up ALL previous subscriptions (handlers + API)
       await cleanupSubscriptions()
 
-      // Give UI a tick to clear existing chart data visually
-      // setTickHistory([])
-      // setOHLCHistory([])
+      // NOTE: We intentionally do NOT clear tickHistory / ohlcHistory here.
+      // Together with the matching change in tradingStore.setChartStyle and
+      // the series-seed logic in TradingChart, keeping the existing history
+      // means the chart re-renders the FULL history on the new series
+      // immediately — no "chart starts from 0" flash.
       await new Promise(resolve => setTimeout(resolve, 50))
       
       const api = getDerivAPI()
@@ -404,46 +406,62 @@ function Home() {
           throw err
         }
       }
-      
-      // Fetch appropriate history for the new chart style
+
+      // Read the latest store state so we can decide whether a re-fetch is
+      // actually needed for the current symbol. If the relevant history
+      // array is already populated AND belongs to the current symbol, we
+      // skip the network round-trip entirely — the chart already has data.
+      const storeState = useTradingStore.getState()
+      const hasTickHistoryForSymbol =
+        storeState.tickHistory.length > 0 &&
+        storeState.tickHistory[storeState.tickHistory.length - 1]?.symbol === currentSymbol
+      const hasOhlcHistoryForSymbol =
+        storeState.ohlcHistory.length > 0 &&
+        storeState.ohlcHistory[storeState.ohlcHistory.length - 1]?.symbol === currentSymbol
+
+      // Fetch appropriate history for the new chart style (only if missing)
       try {
         if (chartStyle === 'area' || chartStyle === 'line') {
-          const history = await fetchWithRetry(() => api.getTickHistory(currentSymbol, 1000))
-          if (history) {
-            const ticks = history.prices.map((price: number, i: number) => ({
-              epoch: history.times[i],
-              quote: price,
-              symbol: currentSymbol,
-            }))
-            setTickHistory(ticks)
+          if (!hasTickHistoryForSymbol) {
+            const history = await fetchWithRetry(() => api.getTickHistory(currentSymbol, 1000))
+            if (history) {
+              const ticks = history.prices.map((price: number, i: number) => ({
+                epoch: history.times[i],
+                quote: price,
+                symbol: currentSymbol,
+              }))
+              setTickHistory(ticks)
+            }
           }
         } else {
           // Fetch OHLC history for OHLC and candlestick chart styles (real candles)
-          try {
-            const ohlcData = await fetchWithRetry(() => api.getOHLCHistory(currentSymbol, 60, 500))
-            if (ohlcData) {
-              const ohlcHistory = ohlcData.candles.map((c: any) => ({
-                open: Number(c.open),
-                high: Number(c.high),
-                low: Number(c.low),
-                close: Number(c.close),
-                epoch: c.epoch,
-                granularity: 60,
-                symbol: currentSymbol,
-              }))
-              setOHLCHistory(ohlcHistory)
-            }
-          } catch (err: any) {
-            if (err.message !== "Connection replaced") {
-              console.warn("[Home] Failed to fetch OHLC history, falling back to tick history:", err)
-              const history = await fetchWithRetry(() => api.getTickHistory(currentSymbol, 1000))
-              if (history) {
-                const ticks = history.prices.map((price: number, i: number) => ({
-                  epoch: history.times[i],
-                  quote: price,
+          if (!hasOhlcHistoryForSymbol) {
+            try {
+              const ohlcData = await fetchWithRetry(() => api.getOHLCHistory(currentSymbol, 60, 500))
+              if (ohlcData) {
+                const ohlcHistory = ohlcData.candles.map((c: any) => ({
+                  open: Number(c.open),
+                  high: Number(c.high),
+                  low: Number(c.low),
+                  close: Number(c.close),
+                  epoch: c.epoch,
+                  granularity: 60,
                   symbol: currentSymbol,
                 }))
-                setTickHistory(ticks)
+                setOHLCHistory(ohlcHistory)
+              }
+            } catch (err: any) {
+              if (err.message !== "Connection replaced") {
+                console.warn("[Home] Failed to fetch OHLC history, falling back to tick history:", err)
+                const history = await fetchWithRetry(() => api.getTickHistory(currentSymbol, 1000))
+                if (history) {
+                  const ticks = history.prices.map((price: number, i: number) => ({
+                    epoch: history.times[i],
+                    quote: price,
+                    symbol: currentSymbol,
+                  }))
+                  setTickHistory(ticks)
+                }
               }
             }
           }

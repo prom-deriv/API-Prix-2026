@@ -191,6 +191,60 @@ const TradingChart: React.FC<TradingChartProps> = memo(({ className }) => {
 
     seriesRef.current = newSeries
 
+    // ✅ SEED NEW SERIES WITH EXISTING HISTORY IMMEDIATELY
+    // Pull the latest history straight from the store (not from closure vars,
+    // which may be stale on the effect that created the series). This prevents
+    // the chart from appearing to "start from 0" when the user toggles chart
+    // style — the existing, already-fetched history is re-drawn on the new
+    // series in the same tick, before any live updates arrive.
+    try {
+      const { tickHistory: currentTicks, ohlcHistory: currentOhlc } =
+        useTradingStore.getState()
+
+      if (chartStyle === 'area' || chartStyle === 'line') {
+        if (currentTicks.length > 0) {
+          const seeded = currentTicks
+            .filter((t) => t && typeof t.epoch !== 'undefined' && typeof t.quote !== 'undefined')
+            .map((t) => ({ time: t.epoch as Time, value: Number(t.quote) }))
+            .sort((a, b) => (a.time as number) - (b.time as number))
+            .filter((item, idx, arr) => idx === 0 || item.time !== arr[idx - 1].time)
+
+          if (seeded.length > 0) {
+            if (chartStyle === 'area') {
+              (newSeries as ISeriesApi<"Area">).setData(seeded as AreaData<Time>[])
+            } else {
+              (newSeries as ISeriesApi<"Line">).setData(seeded as LineData<Time>[])
+            }
+          }
+        }
+      } else {
+        if (currentOhlc.length > 0) {
+          const seeded = currentOhlc
+            .filter((o) => o &&
+              typeof o.epoch !== 'undefined' &&
+              typeof o.open !== 'undefined' &&
+              typeof o.high !== 'undefined' &&
+              typeof o.low !== 'undefined' &&
+              typeof o.close !== 'undefined')
+            .map((o) => ({
+              time: o.epoch as Time,
+              open: Number(o.open),
+              high: Number(o.high),
+              low: Number(o.low),
+              close: Number(o.close),
+            }))
+            .sort((a, b) => (a.time as number) - (b.time as number))
+            .filter((item, idx, arr) => idx === 0 || item.time !== arr[idx - 1].time)
+
+          if (seeded.length > 0) {
+            (newSeries as ISeriesApi<"Candlestick">).setData(seeded as CandlestickData<Time>[])
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[TradingChart] Failed to seed new series with existing history:", err)
+    }
+
   }, [chartStyle])
 
   // Update chart data based on chart style
