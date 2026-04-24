@@ -222,23 +222,23 @@ export const useTradingStore = create<TradingState>()(
   },
 
   setTickHistory: (history) => {
-    // NOTE: A previous version of this function hard-dropped bulk history
-    // whose symbol didn't match the store's `currentSymbol`. That was too
-    // aggressive — zustand/persist rehydration and OAuth-reconnect timing
-    // can legitimately make the two disagree for a brief window, which
-    // caused the chart to be stuck empty after a symbol switch.
+    // Simple passthrough. Callers (Home.tsx, MochiMoto.tsx, SurfTheWaves.tsx)
+    // already guard their writes behind a symbol-match check
+    // (`loadingSymbolRef !== symbolToLoad`), so this store-level setter
+    // intentionally does NOT try to be clever about symbols.
     //
-    // The correct behaviour is: **the bulk writer wins**. Whatever symbol
-    // the fresh history is for, make that the current symbol so the UI
-    // and the data stay in sync. Stale per-tick leakage is still blocked
-    // by the guard in `setCurrentTick` below.
-    if (history.length > 0) {
-      const firstSymbol = history[0]?.symbol
-      if (firstSymbol && firstSymbol !== get().currentSymbol) {
-        set({ tickHistory: history, currentSymbol: firstSymbol })
-        return
-      }
-    }
+    // A previous revision tried two different "clever" behaviours here —
+    // first hard-dropping mismatched history, later silently flipping
+    // `currentSymbol` to match. Both were footguns:
+    //   * Dropping caused legit history to disappear on reconnect.
+    //   * Flipping caused a silent desync where the UI still showed the
+    //     user's picked symbol but the store believed a different one,
+    //     producing the "chart stuck with stale prices, no live ticks"
+    //     bug after switching assets.
+    //
+    // Cross-symbol leakage from live WebSocket pushes is still blocked at
+    // the per-tick level by `setCurrentTick` / `setCurrentOHLC` below,
+    // which is the correct layer for that guard.
     set({ tickHistory: history })
   },
 
@@ -303,18 +303,10 @@ export const useTradingStore = create<TradingState>()(
   },
 
   setOHLCHistory: (history) => {
-    // Mirror of setTickHistory: bulk writer wins. If the new OHLC history
-    // is for a different symbol than the store thinks is current, reconcile
-    // so the UI and data remain consistent. This prevents the "empty chart"
-    // state where a persisted symbol differs from the initial currentSymbol
-    // at rehydration time.
-    if (history.length > 0) {
-      const firstSymbol = history[0]?.symbol
-      if (firstSymbol && firstSymbol !== get().currentSymbol) {
-        set({ ohlcHistory: history, currentSymbol: firstSymbol })
-        return
-      }
-    }
+    // Simple passthrough — see the extended comment on setTickHistory above
+    // for why the "clever" reconcile logic was removed. The caller owns
+    // the symbol-match check; this setter must not silently mutate
+    // `currentSymbol`.
     set({ ohlcHistory: history })
   },
 
