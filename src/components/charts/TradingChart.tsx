@@ -282,8 +282,6 @@ const TradingChart: React.FC<TradingChartProps> = memo(({ className }) => {
     }
 
     if (chartRef.current) {
-      // Auto fit content to ensure chart doesn't look empty or start at wrong scale
-      chartRef.current.timeScale().fitContent()
       chartRef.current.timeScale().scrollToRealTime()
     }
   }, [tickHistory, ohlcHistory, chartStyle])
