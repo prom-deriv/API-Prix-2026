@@ -292,6 +292,11 @@ function Home() {
         return
       }
       
+      // Give UI a tick to clear existing chart data visually
+      // setTickHistory([])
+      // setOHLCHistory([])
+      await new Promise(resolve => setTimeout(resolve, 50))
+
       const api = getDerivAPI()
       
       try {
@@ -381,8 +386,8 @@ function Home() {
       await cleanupSubscriptions()
 
       // Give UI a tick to clear existing chart data visually
-      setTickHistory([])
-      setOHLCHistory([])
+      // setTickHistory([])
+      // setOHLCHistory([])
       await new Promise(resolve => setTimeout(resolve, 50))
       
       const api = getDerivAPI()

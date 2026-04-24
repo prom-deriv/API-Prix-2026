@@ -229,17 +229,17 @@ const TradingChart: React.FC<TradingChartProps> = memo(({ className }) => {
         return item.time !== validLineData[index - 1].time
       })
 
-      try {
-        if (chartStyle === 'area') {
-          (seriesRef.current as ISeriesApi<"Area">).setData(uniqueData as AreaData<Time>[])
-        } else {
-          (seriesRef.current as ISeriesApi<"Line">).setData(uniqueData as LineData<Time>[])
+        try {
+          if (chartStyle === 'area') {
+            (seriesRef.current as ISeriesApi<"Area">).setData(uniqueData as AreaData<Time>[])
+          } else {
+            (seriesRef.current as ISeriesApi<"Line">).setData(uniqueData as LineData<Time>[])
+          }
+        } catch (error) {
+          console.warn("[TradingChart] Failed to set tick data, resetting:", error)
+          try { seriesRef.current.setData([]) } catch { /* ignore */ }
         }
-      } catch (error) {
-        console.warn("[TradingChart] Failed to set tick data, resetting:", error)
-        try { seriesRef.current.setData([]) } catch { /* ignore */ }
-      }
-    } else {
+      } else {
       // Use real OHLC data for both 'ohlc' and 'candlestick' chart styles
       if (ohlcHistory.length === 0) return
 
