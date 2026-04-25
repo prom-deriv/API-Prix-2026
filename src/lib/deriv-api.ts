@@ -678,6 +678,18 @@ class DerivAPI {
    * Only resolves when Deriv API confirms subscription has been terminated
    * This is the MOST CRITICAL fix for the "Stuck at 0" bug
    */
+  async forget(subscriptionId: string): Promise<any> {
+    const reqId = this.getNextReqId()
+    console.log(`[DerivAPI] 🔌 Forcing termination of subscription ${subscriptionId}`)
+    const result = await this.request({
+      forget: subscriptionId,
+      req_id: reqId
+    })
+    this.subscriptions.delete(subscriptionId)
+    console.log(`[DerivAPI] ✅ Successfully terminated subscription ${subscriptionId}:`, result)
+    return result
+  }
+
   async forgetAll(type: 'ticks' | 'candles' | 'proposal_open_contract'): Promise<any> {
     const reqId = this.getNextReqId()
 
@@ -961,10 +973,20 @@ class DerivAPI {
       return () => {
         this.off("tick", handler)
         this.activeSubscriptions.delete(subscriptionKey)
-        // Fire and forget, don't wait or clear anything else
-        this.forgetAll("ticks").catch(() => undefined)
+        
+        if (response.subscription?.id) {
+          // Fire and forget specific subscription, don't kill all ticks globally
+          this.forget(response.subscription.id).catch(() => undefined)
+        } else {
+          // Fallback if no ID (shouldn't happen on successful sub)
+          this.forgetAll("ticks").catch(() => undefined)
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.message === "Connection replaced") {
+        console.log(`[DerivAPI] Ignoring 'Connection replaced' during subscribeTicks for ${symbol}`)
+        return () => {}
+      }
       console.error("[DerivAPI] Error in subscribeTicks:", error)
       throw error
     }
@@ -1035,9 +1057,20 @@ class DerivAPI {
       return () => {
         this.off("ohlc", handler)
         this.activeSubscriptions.delete(subscriptionKey)
-        this.forgetAll("candles").catch(() => undefined)
+        
+        if (response.subscription?.id) {
+          // Fire and forget specific subscription, don't kill all OHLC globally
+          this.forget(response.subscription.id).catch(() => undefined)
+        } else {
+          // Fallback if no ID
+          this.forgetAll("candles").catch(() => undefined)
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.message === "Connection replaced") {
+        console.log(`[DerivAPI] Ignoring 'Connection replaced' during subscribeOHLC for ${symbol}`)
+        return () => {}
+      }
       console.error("[DerivAPI] Error in subscribeOHLC:", error)
       throw error
     }
