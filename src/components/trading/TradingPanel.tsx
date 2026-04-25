@@ -18,12 +18,13 @@ const durationUnitOptions = [
   { value: "d", label: "Days" },
 ]
 
-type ContractCategory = "RISE_FALL" | "HIGHER_LOWER" | "TOUCH_NO_TOUCH"
+type ContractCategory = "RISE_FALL" | "HIGHER_LOWER" | "TOUCH_NO_TOUCH" | "MULTIPLIERS"
 
 const contractCategoryOptions: { value: ContractCategory; label: string }[] = [
   { value: "RISE_FALL", label: "Rise/Fall" },
   { value: "HIGHER_LOWER", label: "Higher/Lower" },
   { value: "TOUCH_NO_TOUCH", label: "Touch/No Touch" },
+  { value: "MULTIPLIERS", label: "Multipliers" },
 ]
 
 const TradingPanel: React.FC = () => {
@@ -51,6 +52,8 @@ const TradingPanel: React.FC = () => {
   const [contractCategory, setContractCategory] = useState<ContractCategory>("RISE_FALL")
   const [isPositiveOffset, setIsPositiveOffset] = useState<boolean>(true)
   const [availableContractTypes, setAvailableContractTypes] = useState<Set<ContractCategory>>(new Set(["RISE_FALL", "HIGHER_LOWER", "TOUCH_NO_TOUCH"]))
+  const [multiplierValue, setMultiplierValue] = useState<number>(100)
+  const [availableMultipliers, setAvailableMultipliers] = useState<number[]>([100, 200, 300, 500, 1000])
   const [availableContracts, setAvailableContracts] = useState<any[]>([])
   const [isTakeProfitEnabled, setIsTakeProfitEnabled] = useState<boolean>(false)
   const [takeProfitValue, setTakeProfitValue] = useState<string>("")
@@ -136,31 +139,70 @@ const TradingPanel: React.FC = () => {
         // Determine which contract types are available
         const availableTypes = new Set<ContractCategory>()
         
-        // Check for Rise/Fall availability
-        const hasRiseFall = contracts.available.some(
-          (c) => c.contract_type === "CALL" || c.contract_type === "PUT"
-        )
-        if (hasRiseFall) availableTypes.add("RISE_FALL")
-        console.log(`[TradingPanel] ${currentSymbol} - Rise/Fall available:`, hasRiseFall)
-        
-        // Check for Higher/Lower availability (contract_category: "callput")
-        // Since Deriv's API v3 format can have different properties compared to v1
-        const hasHigherLower = contracts.available.some(
-          (c: any) => c.barrier_category === "euro_non_atm" || 
-                 c.contract_category === "callput" ||
-                 c.contract_category_display === "Higher/Lower" ||
-                 (c.contract_type === "CALL" && c.barriers === 1) ||
-                 (c.contract_type === "PUT" && c.barriers === 1)
-        )
-        if (hasHigherLower) availableTypes.add("HIGHER_LOWER")
-        console.log(`[TradingPanel] ${currentSymbol} - Higher/Lower available:`, hasHigherLower)
-        
-        // Check for Touch/No Touch availability
-        const hasTouchNoTouch = contracts.available.some(
-          (c) => c.contract_type === "ONETOUCH" || c.contract_type === "NOTOUCH"
-        )
-        if (hasTouchNoTouch) availableTypes.add("TOUCH_NO_TOUCH")
-        console.log(`[TradingPanel] ${currentSymbol} - Touch/No Touch available:`, hasTouchNoTouch)
+        if (contracts && contracts.available && Array.isArray(contracts.available)) {
+          // Check for Rise/Fall availability
+          const hasRiseFall = contracts.available.some(
+            (c) => c.contract_type === "CALL" || c.contract_type === "PUT"
+          )
+          if (hasRiseFall) availableTypes.add("RISE_FALL")
+          console.log(`[TradingPanel] ${currentSymbol} - Rise/Fall available:`, hasRiseFall)
+          
+          // Check for Higher/Lower availability (contract_category: "callput")
+          // Since Deriv's API v3 format can have different properties compared to v1
+          const hasHigherLower = contracts.available.some(
+            (c: any) => c.barrier_category === "euro_non_atm" || 
+                   c.contract_category === "callput" ||
+                   c.contract_category_display === "Higher/Lower" ||
+                   (c.contract_type === "CALL" && c.barriers === 1) ||
+                   (c.contract_type === "PUT" && c.barriers === 1)
+          )
+          if (hasHigherLower) availableTypes.add("HIGHER_LOWER")
+          console.log(`[TradingPanel] ${currentSymbol} - Higher/Lower available:`, hasHigherLower)
+          
+          // Check for Touch/No Touch availability
+          const hasTouchNoTouch = contracts.available.some(
+            (c) => c.contract_type === "ONETOUCH" || c.contract_type === "NOTOUCH"
+          )
+          if (hasTouchNoTouch) availableTypes.add("TOUCH_NO_TOUCH")
+          console.log(`[TradingPanel] ${currentSymbol} - Touch/No Touch available:`, hasTouchNoTouch)
+          
+          // Check for Multipliers availability
+          const multContracts = contracts.available.filter(
+            (c) => c.contract_type === "MULTUP" || c.contract_type === "MULTDOWN"
+          )
+          if (multContracts.length > 0) {
+            availableTypes.add("MULTIPLIERS")
+            
+            // Extract available multipliers
+            const multipliers = new Set<number>()
+            multContracts.forEach(c => {
+              if (c.multiplier) {
+                // If it's a number/string
+                if (typeof c.multiplier === 'number') multipliers.add(c.multiplier)
+                // If it's an array
+                else if (Array.isArray(c.multiplier)) {
+                  c.multiplier.forEach(m => multipliers.add(typeof m === 'number' ? m : parseInt(m as string)))
+                }
+              }
+              // Also try multiplier_range
+              if (c.multiplier_range && Array.isArray(c.multiplier_range)) {
+                c.multiplier_range.forEach(m => multipliers.add(typeof m === 'number' ? m : parseInt(m as string)))
+              }
+            })
+            
+            // Fallback if API didn't explicitly list them in a parsed format
+            if (multipliers.size === 0) {
+              [100, 200, 300, 500, 1000].forEach(m => multipliers.add(m))
+            }
+            
+            const sortedMultipliers = Array.from(multipliers).sort((a, b) => a - b)
+            setAvailableMultipliers(sortedMultipliers)
+            if (!sortedMultipliers.includes(multiplierValue) && sortedMultipliers.length > 0) {
+              setMultiplierValue(sortedMultipliers[0])
+            }
+          }
+          console.log(`[TradingPanel] ${currentSymbol} - Multipliers available:`, multContracts.length > 0)
+        }
         
         console.log(`[TradingPanel] ${currentSymbol} - Final available types:`, Array.from(availableTypes))
         setAvailableContractTypes(availableTypes)
@@ -504,12 +546,17 @@ const TradingPanel: React.FC = () => {
           const params: TradeParams = {
             symbol: currentSymbol,
             amount: parseFloat(amount),
-            basis: "stake",
+            basis: contractCategory === "MULTIPLIERS" ? "multiplier" : "stake",
             contract_type: contractType,
-            duration: parseInt(duration),
-            duration_unit: durationUnit,
             currency: "USD",
-            ...(barrierString && { barrier: barrierString }),
+            ...(contractCategory !== "MULTIPLIERS" && {
+              duration: parseInt(duration),
+              duration_unit: durationUnit,
+            }),
+            ...(contractCategory === "MULTIPLIERS" && {
+              multiplier: multiplierValue,
+            }),
+            ...(barrierString && contractCategory !== "MULTIPLIERS" && { barrier: barrierString }),
           }
           const result = await api.getProposal(params)
           currentProposal = { id: result.id, ask_price: result.ask_price, payout: result.payout }
@@ -829,32 +876,38 @@ const TradingPanel: React.FC = () => {
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <label className="text-sm font-medium">Contract Type</label>
-          <div className="flex gap-1 p-1 bg-muted rounded-lg">
-            {contractCategoryOptions.map((option) => {
-              const isAvailable = availableContractTypes.has(option.value)
-              return (
-                <Button
-                  key={option.value}
-                  variant={contractCategory === option.value ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => { 
-                    if (isAvailable) {
-                      setContractCategory(option.value)
-                      setProposal(null)
-                    }
-                  }}
-                  disabled={!isAvailable || isSymbolLoading}
-                  className={cn(
-                    "flex-1 text-xs",
-                    !isAvailable && "opacity-50 cursor-not-allowed"
-                  )}
-                  title={!isAvailable ? "This contract type is not available for the current symbol" : undefined}
-                >
-                  {option.label}
-                </Button>
-              )
-            })}
-          </div>
+          {availableContractTypes.size === 0 ? (
+            <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm text-center">
+              Options trading is not available for this asset.
+            </div>
+          ) : (
+            <div className="flex gap-1 p-1 bg-muted rounded-lg">
+              {contractCategoryOptions.map((option) => {
+                const isAvailable = availableContractTypes.has(option.value)
+                return (
+                  <Button
+                    key={option.value}
+                    variant={contractCategory === option.value ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => { 
+                      if (isAvailable) {
+                        setContractCategory(option.value)
+                        setProposal(null)
+                      }
+                    }}
+                    disabled={!isAvailable || isSymbolLoading}
+                    className={cn(
+                      "flex-1 text-xs",
+                      !isAvailable && "opacity-50 cursor-not-allowed"
+                    )}
+                    title={!isAvailable ? "This contract type is not available for the current symbol" : undefined}
+                  >
+                    {option.label}
+                  </Button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Barrier Offset Control - shown for Higher/Lower and Touch/No Touch */}
@@ -934,18 +987,37 @@ const TradingPanel: React.FC = () => {
             onChange={(e) => { if (/^\d*\.?\d*$/.test(e.target.value)) { setAmount(e.target.value); setProposal(null) } }}
             className="text-lg" />
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        {contractCategory === "MULTIPLIERS" ? (
           <div className="space-y-2">
-            <label className="text-sm font-medium">Duration</label>
-            <Input type="text" inputMode="numeric" placeholder="5" value={duration}
-              onChange={(e) => { if (/^\d*$/.test(e.target.value)) { setDuration(e.target.value); setProposal(null) } }} />
+            <label className="text-sm font-medium">Multiplier</label>
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              {availableMultipliers.map((mult) => (
+                <Button
+                  key={mult}
+                  variant={multiplierValue === mult ? "default" : "outline"}
+                  size="sm"
+                  className="flex-1 min-w-[60px]"
+                  onClick={() => { setMultiplierValue(mult); setProposal(null) }}
+                >
+                  x{mult}
+                </Button>
+              ))}
+            </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Unit</label>
-            <Select options={durationUnitOptions} value={durationUnit}
-              onChange={(e) => { setDurationUnit(e.target.value as DurationUnit); setProposal(null) }} />
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Duration</label>
+              <Input type="text" inputMode="numeric" placeholder="5" value={duration}
+                onChange={(e) => { if (/^\d*$/.test(e.target.value)) { setDuration(e.target.value); setProposal(null) } }} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Unit</label>
+              <Select options={durationUnitOptions} value={durationUnit}
+                onChange={(e) => { setDurationUnit(e.target.value as DurationUnit); setProposal(null) }} />
+            </div>
           </div>
-        </div>
+        )}
         {(proposal || (accountType === "demo" && parseFloat(amount) > 0)) && (
           <div className="p-3 rounded-lg bg-muted/50 space-y-1">
             <div className="flex justify-between text-sm">
@@ -1077,6 +1149,18 @@ const TradingPanel: React.FC = () => {
               <Button variant="loss" size="xl" onClick={() => executeTrade("NOTOUCH")} disabled={isTrading || !currentSymbol || isSymbolLoading || !!durationError} className="flex items-center gap-2">
                 {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Target className="h-5 w-5" />}
                 <div className="flex flex-col"><span className="text-base font-bold">NO TOUCH</span><span className="text-xs opacity-80">Won't touch</span></div>
+              </Button>
+            </>
+          )}
+          {contractCategory === "MULTIPLIERS" && (
+            <>
+              <Button variant="profit" size="xl" onClick={() => executeTrade("MULTUP")} disabled={isTrading || !currentSymbol || isSymbolLoading} className="flex items-center gap-2">
+                {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <TrendingUp className="h-5 w-5" />}
+                <div className="flex flex-col"><span className="text-base font-bold">UP</span><span className="text-xs opacity-80">Multiplier x{multiplierValue}</span></div>
+              </Button>
+              <Button variant="loss" size="xl" onClick={() => executeTrade("MULTDOWN")} disabled={isTrading || !currentSymbol || isSymbolLoading} className="flex items-center gap-2">
+                {isTrading ? <Loader2 className="h-5 w-5 animate-spin" /> : <TrendingDown className="h-5 w-5" />}
+                <div className="flex flex-col"><span className="text-base font-bold">DOWN</span><span className="text-xs opacity-80">Multiplier x{multiplierValue}</span></div>
               </Button>
             </>
           )}

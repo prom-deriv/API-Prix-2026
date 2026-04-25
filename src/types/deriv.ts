@@ -288,8 +288,8 @@ export type DerivMessage =
   | { error: { code: string; message: string; details?: any } }
 
 // Trading Types
-export type ContractType = "CALL" | "PUT" | "RISE" | "FALL" | "ONETOUCH" | "NOTOUCH"
-export type Basis = "stake" | "payout"
+export type ContractType = "CALL" | "PUT" | "RISE" | "FALL" | "ONETOUCH" | "NOTOUCH" | "MULTUP" | "MULTDOWN"
+export type Basis = "stake" | "payout" | "multiplier"
 export type DurationUnit = "t" | "s" | "m" | "h" | "d"
 
 export interface TradeParams {
@@ -297,10 +297,11 @@ export interface TradeParams {
   amount: number
   basis: Basis
   contract_type: ContractType
-  duration: number
-  duration_unit: DurationUnit
+  duration?: number
+  duration_unit?: DurationUnit
   currency?: string
   barrier?: string
+  multiplier?: number
 }
 
 export interface TradeResult {
@@ -396,6 +397,8 @@ export interface ContractForAvailable {
   sentiment: string
   submarket: string
   symbol: string
+  multiplier?: number | string | number[] | string[]
+  multiplier_range?: number[] | string[]
 }
 
 export interface ContractsForResponse {
