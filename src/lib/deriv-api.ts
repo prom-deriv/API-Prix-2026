@@ -939,9 +939,6 @@ class DerivAPI {
       const subscriptionKey = `ticks_${symbol}`
 
 
-      // ✅ CLEAR PREVIOUS HANDLERS
-      this.handlers.delete("tick")
-
       const handler = (data: DerivMessage) => {
         if ("msg_type" in data && data.msg_type === "tick" && "tick" in data) {
           const tick = (data as TickStream).tick
@@ -1016,9 +1013,6 @@ class DerivAPI {
       this.activeSubscriptions.delete(key)
     })
 
-    // CRITICAL: Clear ALL tick event handlers to prevent stale handlers from accumulating
-    this.handlers.delete("tick")
-
     // Send forget_all to the API
     await this.forgetAll("ticks")
   }
@@ -1045,9 +1039,6 @@ class DerivAPI {
       const reqId = this.getNextReqId()
       const subscriptionKey = `ohlc_${symbol}_${granularity}`
 
-
-      // ✅ CLEAR PREVIOUS HANDLERS
-      this.handlers.delete("ohlc")
 
       const handler = (data: DerivMessage) => {
         if ("msg_type" in data && data.msg_type === "ohlc" && "ohlc" in data) {
@@ -1112,9 +1103,6 @@ class DerivAPI {
     ohlcSubscriptions.forEach(([key, _]) => {
       this.activeSubscriptions.delete(key)
     })
-
-    // CRITICAL: Clear ALL ohlc event handlers to prevent stale handlers from accumulating
-    this.handlers.delete("ohlc")
 
     // Send forget_all to the API
     await this.forgetAll("candles")
