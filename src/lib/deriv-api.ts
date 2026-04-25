@@ -58,7 +58,6 @@ class DerivAPI {
   private lastPong: number = Date.now()
   private shouldReconnect: boolean = true // Flag to prevent reconnection when intentionally disconnecting
   private pendingRequestsQueue: Array<() => void> = [] // Queue for requests sent before WebSocket is ready
-  private isSubscribing: boolean = false // Mutex to prevent concurrent subscription requests
   private isHandlingAuth: boolean = false // Mutex to prevent duplicate auth handling
   // Store credentials for OTP refresh on reconnect
   private storedAccessToken: string | null = null
@@ -902,42 +901,10 @@ class DerivAPI {
     })
   }
 
-  private subscriptionPromises: Map<string, Promise<any>> = new Map()
-
   async subscribeTicks(symbol: string, callback: (tick: TickStream["tick"]) => void): Promise<() => void> {
-    const subscriptionKey = `ticks_${symbol}`
-    
-    // Deduplicate exact same subscription requests
-    if (this.subscriptionPromises.has(subscriptionKey)) {
-      console.log(`[DerivAPI] Joining existing tick subscription promise for ${symbol}`)
-      await this.subscriptionPromises.get(subscriptionKey)
-      // The handlers are shared, so we just return a cleanup function
-      return () => {
-        // Only actually unsubscribe if this is the last one (simplified for now: just relies on caller managing it)
-        // In a full implementation, we'd refcount subscriptions
-      }
-    }
-
-    // ✅ MUTEX: Prevent concurrent subscription requests with timeout
-    if (this.isSubscribing) {
-      let waited = 0
-      while (this.isSubscribing && waited < 10000) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-        waited += 100
-      }
-      // If still subscribing after 10s timeout, force release
-      if (this.isSubscribing) {
-        console.warn("[DerivAPI] Subscription mutex timeout, force releasing")
-        this.isSubscribing = false
-      }
-    }
-
-    this.isSubscribing = true
-
     try {
       const reqId = this.getNextReqId()
       const subscriptionKey = `ticks_${symbol}`
-
 
       const handler = (data: DerivMessage) => {
         if ("msg_type" in data && data.msg_type === "tick" && "tick" in data) {
@@ -997,10 +964,9 @@ class DerivAPI {
         // Fire and forget, don't wait or clear anything else
         this.forgetAll("ticks").catch(() => undefined)
       }
-    } finally {
-      // ✅ MUTEX: Release lock
-      this.isSubscribing = false
-      this.subscriptionPromises.delete(subscriptionKey)
+    } catch (error) {
+      console.error("[DerivAPI] Error in subscribeTicks:", error)
+      throw error
     }
   }
 
@@ -1019,27 +985,9 @@ class DerivAPI {
   }
 
   async subscribeOHLC(symbol: string, granularity: number, callback: (ohlc: OHLCStream["ohlc"]) => void): Promise<() => void> {
-    // ✅ MUTEX: Prevent concurrent subscription requests with timeout
-    if (this.isSubscribing) {
-      console.warn("[DerivAPI] Subscription already in progress, waiting with timeout...")
-      let waited = 0
-      while (this.isSubscribing && waited < 10000) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-        waited += 100
-      }
-      // If still subscribing after 10s timeout, force release
-      if (this.isSubscribing) {
-        console.warn("[DerivAPI] Subscription mutex timeout, force releasing")
-        this.isSubscribing = false
-      }
-    }
-
-    this.isSubscribing = true
-
     try {
       const reqId = this.getNextReqId()
       const subscriptionKey = `ohlc_${symbol}_${granularity}`
-
 
       const handler = (data: DerivMessage) => {
         if ("msg_type" in data && data.msg_type === "ohlc" && "ohlc" in data) {
@@ -1089,9 +1037,9 @@ class DerivAPI {
         this.activeSubscriptions.delete(subscriptionKey)
         this.forgetAll("candles").catch(() => undefined)
       }
-    } finally {
-      // ✅ MUTEX: Release lock
-      this.isSubscribing = false
+    } catch (error) {
+      console.error("[DerivAPI] Error in subscribeOHLC:", error)
+      throw error
     }
   }
 
