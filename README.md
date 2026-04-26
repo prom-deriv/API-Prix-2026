@@ -8,6 +8,11 @@ A high-performance, deployable trading web application built using the Deriv API
 - **Interactive Charts**: Candlestick charts with Lightweight Charts (TradingView)
 - **One-Click Trading**: RISE/FALL buttons for quick trades
 - **Real Accounts & Trading**: Support for Real Demo and Real Account trading directly from Deriv API V2
+- **Ghost Trading (AI Bots)**: Trade alongside Bubu and Dudu, our automated trading mascots with unique strategies
+- **AI Trading Assistant**: Integrated AI to help answer trading questions and guide decisions
+- **Advanced Trade Management**: Set Stop Loss and Take Profit levels for your positions
+- **Smart Alerts & Watchlist**: Custom price alerts and personalized asset watchlists
+- **Social Trading**: Follow and interact with other traders' activities
 - **Gamified Trading**: Engaging mini-games powered by live market data:
   - **Mochi Moto**: A racing game where the track slope reacts to real-time asset prices
   - **Surf the Waves**: A surfing game where players perform tricks and catch waves based on market volatility
@@ -112,6 +117,12 @@ Create automated trading strategies with:
 - Custom actions per rule
 - LocalStorage persistence
 
+### Ghost Trading Engine
+Automated trading system featuring:
+- **Bubu Mascot**: Aggressive/Trend-following AI personality
+- **Dudu Mascot**: Conservative/Mean-reverting AI personality
+- Performance tracking and live strategy execution
+
 ## Security
 
 - No hardcoded credentials
@@ -149,7 +160,6 @@ The application connects directly to the user's real or demo Deriv accounts usin
 - [ ] Account dashboard with balance/portfolio
 - [ ] Advanced strategy backtesting
 - [ ] Mobile app (React Native)
-- [ ] Social features (strategy sharing)
 
 ## License
 
