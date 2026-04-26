@@ -31,7 +31,7 @@ const DerivGiftCard = () => {
           <div className="flex-shrink-0 w-full md:w-1/3 flex items-center justify-center">
             <div className="relative group overflow-hidden rounded-xl shadow-lg border border-primary/20 transition-transform duration-300 hover:scale-[1.02]">
               <img 
-                src="/Gift Card/Deriv Gift Card.png" 
+                src="/gift-card/deriv-gift-card.png" 
                 alt="Deriv Digital Gift Card" 
                 className="w-full object-cover"
               />
