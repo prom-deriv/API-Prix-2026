@@ -492,6 +492,57 @@ class SoundManager {
   }
 
   /**
+   * Play heartbeat sound for chart ticks
+   */
+  playHeartbeat() {
+    if (!this.ensureContext() || !this.isEnabled) return
+
+    try {
+      const ctx = this.audioContext!
+      
+      // Heartbeat consists of two distinct beats: "lub" and "dub"
+      // "lub" - first beat
+      const osc1 = ctx.createOscillator()
+      const gain1 = ctx.createGain()
+      
+      osc1.type = 'sine'
+      osc1.frequency.setValueAtTime(50, ctx.currentTime) // Low frequency thud
+      osc1.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 0.1)
+      
+      gain1.gain.setValueAtTime(0, ctx.currentTime)
+      gain1.gain.linearRampToValueAtTime(0.6, ctx.currentTime + 0.02) // Quick attack
+      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1) // Quick decay
+
+      osc1.connect(gain1)
+      gain1.connect(this.masterGain!)
+      
+      osc1.start(ctx.currentTime)
+      osc1.stop(ctx.currentTime + 0.15)
+      
+      // "dub" - second beat
+      const osc2 = ctx.createOscillator()
+      const gain2 = ctx.createGain()
+      
+      osc2.type = 'sine'
+      osc2.frequency.setValueAtTime(60, ctx.currentTime + 0.2) // Slightly higher frequency
+      osc2.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.3)
+      
+      gain2.gain.setValueAtTime(0, ctx.currentTime + 0.2)
+      gain2.gain.linearRampToValueAtTime(0.4, ctx.currentTime + 0.22) // Quick attack
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3) // Quick decay
+
+      osc2.connect(gain2)
+      gain2.connect(this.masterGain!)
+      
+      osc2.start(ctx.currentTime + 0.2)
+      osc2.stop(ctx.currentTime + 0.35)
+
+    } catch (err) {
+      console.warn("[SoundManager] Failed to play heartbeat sound:", err)
+    }
+  }
+
+  /**
    * Play whoosh sound for surfing or overtaking
    */
   playWhoosh() {

@@ -23,9 +23,13 @@ import { Link } from "react-router-dom"
 import { ThemeToggle } from "../components/ui/ThemeToggle"
 import Watchlist from "../components/trading/Watchlist"
 import { useAccount } from "../contexts/AccountContext"
+import { Volume2, VolumeX } from "lucide-react"
+import { getSoundManager } from "../utils/soundManager"
+import { useState } from "react"
 
 function Home() {
   const { isConnected, isConnecting } = useAccount()
+  const [isSoundEnabled, setIsSoundEnabled] = useState(false)
 
   const {
     symbols,
@@ -635,6 +639,24 @@ function Home() {
     ? ((lastTick.quote - firstTick.quote) / firstTick.quote) * 100
     : 0
 
+  // Play heartbeat on new tick
+  useEffect(() => {
+    if (isSoundEnabled && currentTick) {
+      const soundManager = getSoundManager()
+      // Only play if audio is actually enabled in the manager
+      if (soundManager.isAudioEnabled()) {
+        soundManager.playHeartbeat()
+      }
+    }
+  }, [currentTick, isSoundEnabled])
+
+  const toggleSound = () => {
+    const newState = !isSoundEnabled
+    setIsSoundEnabled(newState)
+    const soundManager = getSoundManager()
+    soundManager.setEnabled(newState)
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
@@ -676,6 +698,9 @@ function Home() {
               </Link>
               <Button variant="outline" size="sm" onClick={() => { clearState(); initializeAPI() }} disabled={isConnecting}>
                 <RefreshCw className={`h-4 w-4 ${isConnecting ? "animate-spin" : ""}`} />
+              </Button>
+              <Button variant="outline" size="sm" onClick={toggleSound}>
+                {isSoundEnabled ? <Volume2 className="h-4 w-4 text-primary" /> : <VolumeX className="h-4 w-4 text-muted-foreground" />}
               </Button>
             </div>
           </div>
