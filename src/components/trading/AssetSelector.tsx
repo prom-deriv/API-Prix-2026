@@ -12,9 +12,9 @@ interface AssetSelectorProps {
 // Market icons mapping
 const marketIcons: Record<string, string> = {
   "Synthetic Indices": "🔮",
-  "Forex": "💱",
-  "Commodities": "🛢️",
   "Stock Indices": "📈",
+  "Forex": "💱",
+  "Commodities": "🥇",
   "Cryptocurrencies": "₿",
   "Basket Indices": "🧺",
 }

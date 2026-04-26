@@ -858,13 +858,21 @@ class DerivAPI {
           if (data.active_symbols && Array.isArray(data.active_symbols)) {
             // V2 API returns different field names than V1
             // Map V2 fields to V1 field names for backward compatibility
+            const marketNames: Record<string, string> = {
+              "synthetic_index": "Synthetic Indices",
+              "indices": "Stock Indices",
+              "cryptocurrency": "Cryptocurrencies",
+              "forex": "Forex",
+              "commodities": "Commodities"
+            };
+
             const mappedSymbols = data.active_symbols.map((s: any) => ({
               // Preserve all original fields
               ...s,
               // Map V2 -> V1 field names (use V1 name if present, otherwise map from V2)
               symbol: s.symbol || s.underlying_symbol,
-              display_name: s.display_name || s.underlying_symbol_name,
-              market_display_name: s.market_display_name || s.market || "Other",
+              display_name: s.display_name || s.underlying_symbol_name || s.symbol || s.underlying_symbol,
+              market_display_name: s.market_display_name || marketNames[s.market] || s.market || "Other Assets",
               submarket_display_name: s.submarket_display_name || s.submarket || "",
               symbol_type: s.symbol_type || s.underlying_symbol_type || "",
               pip: s.pip || s.pip_size || 0.01,
