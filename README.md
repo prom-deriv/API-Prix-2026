@@ -16,7 +16,6 @@ A high-performance, deployable trading web application built using the Deriv API
 - **Gamified Trading**: Engaging mini-games powered by live market data:
   - **Mochi Moto**: A racing game where the track slope reacts to real-time asset prices
   - **Surf the Waves**: A surfing game where players perform tricks and catch waves based on market volatility
-- **Strategy Builder**: Create automated trading strategies with compound conditions
 - **Deriv Digital Gift Card**: Purchase digital gift cards for friends and family using real Deriv account balance
 - **Deriv Rewards Points**: Earn and track your rewards points directly in the application
 - **Dark Mode**: Modern FinTech aesthetic with dark theme
